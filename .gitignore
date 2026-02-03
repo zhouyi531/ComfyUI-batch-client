@@ -24,9 +24,6 @@ Thumbs.db
 data/outputs/
 data/workflows/
 data/templates/
-*.png
-*.jpg
-*.jpeg
 
 # Logs
 *.log
