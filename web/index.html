@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ComfyUI Client</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --bg-gradient: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --accent: #a78bfa;
+            --accent-glow: rgba(167, 139, 250, 0.4);
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --input-bg: rgba(15, 23, 42, 0.6);
+            --success: #34d399;
+            --error: #f87171;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-gradient);
+            min-height: 100vh;
+            color: var(--text-primary);
+            padding: 32px 20px;
+        }
+        .container { max-width: 1000px; margin: 0 auto; }
+        
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .logo {
+            font-size: 1.6rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, #a78bfa, #818cf8);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .server-config {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--card-bg);
+            padding: 8px 14px;
+            border-radius: 10px;
+            border: 1px solid var(--card-border);
+        }
+        .server-config label { font-size: 0.8rem; color: var(--text-secondary); }
+        .server-config input {
+            background: var(--input-bg);
+            border: 1px solid var(--card-border);
+            color: var(--text-primary);
+            padding: 6px 10px;
+            border-radius: 6px;
+            width: 180px;
+            font-size: 0.85rem;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 24px;
+            background: var(--card-bg);
+            padding: 4px;
+            border-radius: 12px;
+            border: 1px solid var(--card-border);
+        }
+        .tab {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .tab.active {
+            background: var(--accent);
+            color: #1e1b4b;
+        }
+        .tab:hover:not(.active) { background: rgba(255,255,255,0.05); }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        .card h2 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .step-badge {
+            background: var(--accent);
+            color: #1e1b4b;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 20px;
+        }
+
+        .drop-zone {
+            border: 2px dashed var(--card-border);
+            border-radius: 12px;
+            padding: 32px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: var(--input-bg);
+        }
+        .drop-zone:hover { border-color: var(--accent); background: rgba(167,139,250,0.05); }
+        .drop-zone p { color: var(--text-secondary); font-size: 0.9rem; }
+
+        textarea {
+            width: 100%;
+            height: 100px;
+            background: var(--input-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            padding: 12px;
+            color: var(--text-primary);
+            font-family: monospace;
+            font-size: 0.8rem;
+            resize: vertical;
+            margin-top: 12px;
+        }
+        textarea:focus { outline: none; border-color: var(--accent); }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #a78bfa, #818cf8);
+            color: #1e1b4b;
+            box-shadow: 0 4px 16px var(--accent-glow);
+        }
+        .btn-primary:hover { transform: translateY(-1px); }
+        .btn-secondary {
+            background: var(--card-bg);
+            color: var(--text-primary);
+            border: 1px solid var(--card-border);
+        }
+        .btn-secondary:hover { background: rgba(255,255,255,0.08); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-group { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 12px 10px; border-bottom: 1px solid var(--card-border); }
+        th { color: var(--text-secondary); font-weight: 500; font-size: 0.75rem; text-transform: uppercase; }
+        td { font-size: 0.85rem; }
+        .table-wrapper { max-height: 350px; overflow-y: auto; border-radius: 10px; border: 1px solid var(--card-border); }
+        input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); }
+        .node-badge { background: rgba(167,139,250,0.2); color: var(--accent); padding: 3px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary); font-size: 0.85rem; }
+        .form-group input[type="text"], .form-group input[type="number"], .form-group select {
+            width: 100%;
+            background: var(--input-bg);
+            border: 1px solid var(--card-border);
+            color: var(--text-primary);
+            padding: 12px 14px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+        }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--accent); }
+
+        .results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; }
+        .result-item {
+            background: var(--input-bg);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--card-border);
+        }
+        .result-item img { width: 100%; display: block; }
+        .result-item .info { padding: 10px 12px; font-size: 0.75rem; color: var(--text-secondary); }
+
+        .loading { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 32px; }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid var(--card-border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .error-msg { color: var(--error); background: rgba(248,113,113,0.1); padding: 10px 14px; border-radius: 8px; margin-top: 12px; font-size: 0.85rem; }
+        .success-msg { color: var(--success); background: rgba(52,211,153,0.1); padding: 10px 14px; border-radius: 8px; margin-top: 12px; font-size: 0.85rem; }
+        .info-box { background: rgba(96,165,250,0.1); border-left: 3px solid #60a5fa; padding: 12px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 0.85rem; color: #93c5fd; }
+
+        .hidden { display: none !important; }
+        
+        /* Batch specific */
+        .batch-row {
+            display: grid;
+            gap: 8px;
+            margin-bottom: 8px;
+            align-items: center;
+        }
+        .batch-row input {
+            background: var(--input-bg);
+            border: 1px solid var(--card-border);
+            color: var(--text-primary);
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+        }
+        .batch-row input:focus { outline: none; border-color: var(--accent); }
+        .row-actions { display: flex; gap: 4px; }
+        .row-actions button {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            color: var(--text-secondary);
+            width: 32px; height: 32px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .row-actions button:hover { background: rgba(255,255,255,0.08); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">ComfyUI Client</div>
+            <div class="server-config">
+                <label>Server:</label>
+                <input type="text" id="serverAddress" value="192.168.1.21:8188" placeholder="127.0.0.1:8188">
+            </div>
+        </header>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab active" data-tab="single">🎯 Single Run</button>
+            <button class="tab" data-tab="batch">📦 Batch Mode</button>
+        </div>
+
+        <!-- ==================== SINGLE RUN TAB ==================== -->
+        <div id="singleTab" class="tab-content active">
+            
+            <!-- Step 1: Upload -->
+            <div class="card" id="step1">
+                <h2><span class="step-badge">1</span> Upload Workflow</h2>
+                <div class="drop-zone" id="dropZone">
+                    <p>Drag & drop <strong>workflow.json</strong> or click to browse</p>
+                    <input type="file" id="fileInput" accept=".json" style="display:none;">
+                </div>
+                <textarea id="workflowJson" placeholder="Or paste workflow JSON here..."></textarea>
+                <div class="btn-group">
+                    <button class="btn btn-primary" id="scanBtn">Scan Workflow</button>
+                </div>
+                <div id="scanError" class="error-msg hidden"></div>
+            </div>
+
+            <!-- Step 2: Select Variables -->
+            <div class="card hidden" id="step2">
+                <h2><span class="step-badge">2</span> Select Variables</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 12px; font-size: 0.85rem;">Choose which inputs to expose as variables:</p>
+                <div class="table-wrapper">
+                    <table id="varsTable">
+                        <thead>
+                            <tr>
+                                <th width="40"><input type="checkbox" id="selectAll"></th>
+                                <th>Node</th>
+                                <th>Field</th>
+                                <th>Value</th>
+                                <th>Alias</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-primary" id="generateFormBtn">Continue</button>
+                    <button class="btn btn-secondary" id="backToStep1">Back</button>
+                </div>
+            </div>
+
+            <!-- Step 3: Configure & Run -->
+            <div class="card hidden" id="step3">
+                <h2><span class="step-badge">3</span> Configure & Run</h2>
+                <form id="inputForm"></form>
+                <div class="btn-group">
+                    <button class="btn btn-primary" id="runBtn">🚀 Run</button>
+                    <button class="btn btn-secondary" id="saveWorkflowBtn">💾 Save Workflow</button>
+                    <button class="btn btn-secondary" id="saveTemplateBtn">📋 Save Template</button>
+                    <button class="btn btn-secondary" id="backToStep2">Back</button>
+                </div>
+                <div id="runError" class="error-msg hidden"></div>
+            </div>
+
+            <!-- Step 4: Results -->
+            <div class="card hidden" id="step4">
+                <h2><span class="step-badge">✓</span> Results</h2>
+                <div id="loading" class="loading hidden">
+                    <div class="spinner"></div>
+                    <p>Running workflow...</p>
+                </div>
+                <div id="results" class="results-grid"></div>
+                <div class="btn-group">
+                    <button class="btn btn-secondary" id="runAgainBtn">Run Again</button>
+                    <button class="btn btn-secondary" id="startOverBtn">Start Over</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== BATCH TAB ==================== -->
+        <div id="batchTab" class="tab-content">
+            
+            <!-- Select Workflow & Template -->
+            <div class="card">
+                <h2>📂 Select Workflow & Template</h2>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div class="form-group">
+                        <label>Saved Workflow</label>
+                        <select id="batchWorkflowSelect">
+                            <option value="">-- Select Workflow --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Saved Template</label>
+                        <select id="batchTemplateSelect">
+                            <option value="">-- Select Template --</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-secondary" id="loadBatchBtn">Load</button>
+                </div>
+            </div>
+
+            <!-- Batch Editor -->
+            <div class="card hidden" id="batchEditorCard">
+                <h2>📋 Batch Data Editor</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 12px; font-size: 0.85rem;" id="batchVarsInfo"></p>
+                <div id="batchEditor"></div>
+                <div class="btn-group">
+                    <button class="btn btn-secondary" id="addBatchRowBtn">+ Add Row</button>
+                    <button class="btn btn-primary" id="runBatchBtn">🚀 Run Batch</button>
+                </div>
+            </div>
+
+            <!-- Batch Results -->
+            <div class="card hidden" id="batchResultsCard">
+                <h2>📸 Batch Results</h2>
+                <p class="status-text" id="batchStatus"></p>
+                <div id="batchResults" class="results-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const $ = id => document.getElementById(id);
+        const show = el => el.classList.remove('hidden');
+        const hide = el => el.classList.add('hidden');
+
+        // ==================== Tab Switching ====================
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.onclick = () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab + 'Tab').classList.add('active');
+            };
+        });
+
+        // ==================== SINGLE RUN MODE ====================
+        let currentWorkflow = null;
+        let allInputs = [];
+        let selectedInputs = [];
+
+        // File handling
+        $('dropZone').onclick = () => $('fileInput').click();
+        $('dropZone').ondragover = e => { e.preventDefault(); e.currentTarget.style.borderColor = 'var(--accent)'; };
+        $('dropZone').ondragleave = e => e.currentTarget.style.borderColor = '';
+        $('dropZone').ondrop = e => { e.preventDefault(); e.currentTarget.style.borderColor = ''; handleFile(e.dataTransfer.files[0]); };
+        $('fileInput').onchange = e => handleFile(e.target.files[0]);
+
+        function handleFile(file) {
+            if (file && file.name.endsWith('.json')) {
+                const reader = new FileReader();
+                reader.onload = e => { $('workflowJson').value = e.target.result; };
+                reader.readAsText(file);
+            }
+        }
+
+        // Step 1 -> 2
+        $('scanBtn').onclick = async () => {
+            const jsonStr = $('workflowJson').value.trim();
+            if (!jsonStr) return;
+            try {
+                currentWorkflow = JSON.parse(jsonStr);
+                const res = await fetch('/api/scan', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: jsonStr
+                });
+                if (!res.ok) throw new Error(await res.text());
+                allInputs = await res.json();
+                renderTable(allInputs);
+                hide($('scanError'));
+                hide($('step1'));
+                show($('step2'));
+            } catch (e) {
+                $('scanError').textContent = e.message;
+                show($('scanError'));
+            }
+        };
+
+        function renderTable(inputs) {
+            const tbody = document.querySelector('#varsTable tbody');
+            tbody.innerHTML = '';
+            inputs.forEach((item, index) => {
+                const tr = document.createElement('tr');
+                const isVar = String(item.value).startsWith('**');
+                tr.innerHTML = `
+                    <td><input type="checkbox" data-index="${index}" ${isVar ? 'checked' : ''}></td>
+                    <td><span class="node-badge">#${item.node_id}</span> ${item.node_title}</td>
+                    <td>${item.field}</td>
+                    <td style="max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${item.value}</td>
+                    <td><input type="text" value="${item.field}" style="width:100%; padding:6px 8px; background:var(--input-bg); border:1px solid var(--card-border); border-radius:6px; color:var(--text-primary); font-size:0.8rem;"></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        $('selectAll').onchange = e => {
+            document.querySelectorAll('#varsTable tbody input[type="checkbox"]').forEach(cb => cb.checked = e.target.checked);
+        };
+
+        $('backToStep1').onclick = () => { hide($('step2')); show($('step1')); };
+
+        // Step 2 -> 3
+        $('generateFormBtn').onclick = () => {
+            selectedInputs = [];
+            document.querySelectorAll('#varsTable tbody tr').forEach(tr => {
+                const cb = tr.querySelector('input[type="checkbox"]');
+                if (cb.checked) {
+                    const item = allInputs[cb.dataset.index];
+                    const alias = tr.querySelector('input[type="text"]').value || item.field;
+                    selectedInputs.push({ ...item, alias });
+                }
+            });
+            if (selectedInputs.length === 0) { alert('Please select at least one variable.'); return; }
+            renderForm(selectedInputs);
+            hide($('step2'));
+            show($('step3'));
+        };
+
+        $('backToStep2').onclick = () => { hide($('step3')); show($('step2')); };
+
+        function renderForm(vars) {
+            const form = $('inputForm');
+            form.innerHTML = '';
+            vars.forEach(v => {
+                const div = document.createElement('div');
+                div.className = 'form-group';
+                div.innerHTML = `
+                    <label>${v.alias} <span style="font-weight:normal; opacity:0.5; font-size:0.75rem;">(${v.node_id}.${v.field})</span></label>
+                    <input type="${v.type === 'number' ? 'number' : 'text'}" name="${v.id}" value="${v.value}">
+                `;
+                form.appendChild(div);
+            });
+        }
+
+        // Run single
+        $('runBtn').onclick = async () => {
+            const formData = new FormData();
+            formData.append('workflow', JSON.stringify(currentWorkflow));
+            formData.append('server_address', $('serverAddress').value);
+            
+            selectedInputs.forEach(v => {
+                const input = document.querySelector(`#inputForm input[name="${v.id}"]`);
+                if (input) formData.append(`vars[${v.id}]`, input.value);
+            });
+
+            hide($('step3'));
+            show($('step4'));
+            show($('loading'));
+            $('results').innerHTML = '';
+            hide($('runError'));
+
+            try {
+                const res = await fetch('/api/run', { method: 'POST', body: formData });
+                if (!res.ok) throw new Error(await res.text());
+                const data = await res.json();
+                renderResults(data);
+            } catch (e) {
+                $('runError').textContent = e.message;
+                show($('runError'));
+                hide($('step4'));
+                show($('step3'));
+            } finally {
+                hide($('loading'));
+            }
+        };
+
+        function renderResults(results) {
+            const container = $('results');
+            container.innerHTML = '';
+            const keys = Object.keys(results);
+            if (keys.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-secondary);">No output. Use SaveImage node.</p>';
+                return;
+            }
+            keys.forEach(key => {
+                const item = results[key];
+                const div = document.createElement('div');
+                div.className = 'result-item';
+                if (item.type === 'image') {
+                    div.innerHTML = `<img src="${item.data}" alt="Output">`;
+                } else {
+                    div.innerHTML = `<div class="info">${item.data}</div>`;
+                }
+                container.appendChild(div);
+            });
+        }
+
+        $('runAgainBtn').onclick = () => { hide($('step4')); show($('step3')); };
+        $('startOverBtn').onclick = () => location.reload();
+
+        // Save Workflow
+        $('saveWorkflowBtn').onclick = async () => {
+            const name = prompt('Enter workflow name:');
+            if (!name) return;
+            try {
+                await fetch('/api/workflows', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, workflow: currentWorkflow })
+                });
+                alert('Workflow saved!');
+                loadSavedData();
+            } catch (e) { alert('Error: ' + e.message); }
+        };
+
+        // Save Template
+        $('saveTemplateBtn').onclick = async () => {
+            const name = prompt('Enter template name:');
+            if (!name) return;
+            
+            const template = {
+                name,
+                variables: selectedInputs.map(v => {
+                    const input = document.querySelector(`#inputForm input[name="${v.id}"]`);
+                    return {
+                        id: v.id,
+                        node_id: v.node_id,
+                        node_title: v.node_title,
+                        field: v.field,
+                        alias: v.alias,
+                        type: v.type,
+                        default: input ? input.value : v.value
+                    };
+                })
+            };
+            
+            try {
+                await fetch('/api/templates', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(template)
+                });
+                alert('Template saved!');
+                loadSavedData();
+            } catch (e) { alert('Error: ' + e.message); }
+        };
+
+        // ==================== BATCH MODE ====================
+        let batchWorkflow = null;
+        let batchVariables = [];
+        let batchData = [{}];
+
+        async function loadSavedData() {
+            // Load workflows
+            const wfRes = await fetch('/api/workflows');
+            const workflows = await wfRes.json();
+            const wfSelect = $('batchWorkflowSelect');
+            wfSelect.innerHTML = '<option value="">-- Select Workflow --</option>';
+            workflows.forEach(w => {
+                wfSelect.innerHTML += `<option value="${w.name}">${w.name}</option>`;
+            });
+            
+            // Load templates
+            const tplRes = await fetch('/api/templates');
+            const templates = await tplRes.json();
+            const tplSelect = $('batchTemplateSelect');
+            tplSelect.innerHTML = '<option value="">-- Select Template --</option>';
+            templates.forEach(t => {
+                tplSelect.innerHTML += `<option value="${t.name}">${t.name}</option>`;
+            });
+        }
+
+        $('loadBatchBtn').onclick = async () => {
+            const wfName = $('batchWorkflowSelect').value;
+            const tplName = $('batchTemplateSelect').value;
+            
+            if (!wfName) { alert('Please select a workflow'); return; }
+            
+            // Load workflow
+            const wfRes = await fetch(`/api/workflows/${wfName}`);
+            batchWorkflow = await wfRes.json();
+            
+            // Load template if selected
+            if (tplName) {
+                const tplRes = await fetch(`/api/templates/${tplName}`);
+                const template = await tplRes.json();
+                batchVariables = template.variables || [];
+                batchData = [{}];
+                batchVariables.forEach(v => batchData[0][v.id] = v.default || '');
+            } else {
+                // Scan workflow for variables
+                const scanRes = await fetch('/api/scan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(batchWorkflow)
+                });
+                const inputs = await scanRes.json();
+                batchVariables = inputs.slice(0, 5).map(i => ({
+                    id: i.id, alias: i.field, type: i.type, default: i.value
+                }));
+                batchData = [{}];
+                batchVariables.forEach(v => batchData[0][v.id] = v.default || '');
+            }
+            
+            $('batchVarsInfo').textContent = `Variables: ${batchVariables.map(v => v.alias).join(', ')}`;
+            renderBatchEditor();
+            show($('batchEditorCard'));
+        };
+
+        function renderBatchEditor() {
+            const editor = $('batchEditor');
+            editor.innerHTML = '';
+            
+            batchData.forEach((row, idx) => {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'batch-row';
+                rowDiv.style.gridTemplateColumns = `repeat(${batchVariables.length}, 1fr) auto`;
+                
+                batchVariables.forEach(v => {
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.placeholder = v.alias;
+                    input.value = row[v.id] || '';
+                    input.oninput = () => { batchData[idx][v.id] = input.value; };
+                    rowDiv.appendChild(input);
+                });
+                
+                const actions = document.createElement('div');
+                actions.className = 'row-actions';
+                actions.innerHTML = `<button onclick="deleteBatchRow(${idx})">🗑️</button>`;
+                rowDiv.appendChild(actions);
+                
+                editor.appendChild(rowDiv);
+            });
+        }
+
+        window.deleteBatchRow = function(idx) {
+            if (batchData.length > 1) {
+                batchData.splice(idx, 1);
+                renderBatchEditor();
+            }
+        };
+
+        $('addBatchRowBtn').onclick = () => {
+            const newRow = {};
+            batchVariables.forEach(v => newRow[v.id] = '');
+            batchData.push(newRow);
+            renderBatchEditor();
+        };
+
+        $('runBatchBtn').onclick = async () => {
+            if (!batchWorkflow) { alert('Load a workflow first'); return; }
+            
+            $('batchStatus').textContent = 'Running...';
+            show($('batchResultsCard'));
+            $('batchResults').innerHTML = '';
+
+            try {
+                const res = await fetch('/api/batch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        workflow: batchWorkflow,
+                        batch: batchData,
+                        server_address: $('serverAddress').value
+                    })
+                });
+                
+                if (!res.ok) throw new Error(await res.text());
+                
+                const data = await res.json();
+                $('batchStatus').textContent = `Completed ${data.total} jobs. Output: ${data.job_id}`;
+                
+                const gallery = $('batchResults');
+                data.results.forEach(result => {
+                    result.outputs.forEach(out => {
+                        if (out.type === 'image') {
+                            const div = document.createElement('div');
+                            div.className = 'result-item';
+                            div.innerHTML = `
+                                <img src="${out.data}" alt="${out.filename}">
+                                <div class="info">Run ${result.index + 1}</div>
+                            `;
+                            gallery.appendChild(div);
+                        }
+                    });
+                });
+            } catch (e) {
+                $('batchStatus').textContent = 'Error: ' + e.message;
+            }
+        };
+
+        // ==================== Init ====================
+        loadSavedData();
+    </script>
+</body>
+</html>
