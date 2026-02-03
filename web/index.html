@@ -328,6 +328,8 @@
                 </div>
                 <div id="results" class="results-grid"></div>
                 <div class="btn-group">
+                    <button class="btn btn-primary" id="saveWorkflowBtn2">💾 Save Workflow</button>
+                    <button class="btn btn-primary" id="saveTemplateBtn2">📋 Save Template</button>
                     <button class="btn btn-secondary" id="runAgainBtn">Run Again</button>
                     <button class="btn btn-secondary" id="startOverBtn">Start Over</button>
                 </div>
@@ -549,8 +551,8 @@
         $('runAgainBtn').onclick = () => { hide($('step4')); show($('step3')); };
         $('startOverBtn').onclick = () => location.reload();
 
-        // Save Workflow
-        $('saveWorkflowBtn').onclick = async () => {
+        // Save functions
+        async function saveWorkflow() {
             const name = prompt('Enter workflow name:');
             if (!name) return;
             try {
@@ -562,10 +564,9 @@
                 alert('Workflow saved!');
                 loadSavedData();
             } catch (e) { alert('Error: ' + e.message); }
-        };
+        }
 
-        // Save Template
-        $('saveTemplateBtn').onclick = async () => {
+        async function saveTemplate() {
             const name = prompt('Enter template name:');
             if (!name) return;
             
@@ -594,7 +595,13 @@
                 alert('Template saved!');
                 loadSavedData();
             } catch (e) { alert('Error: ' + e.message); }
-        };
+        }
+
+        // Wire up save buttons (Step 3 and Step 4)
+        $('saveWorkflowBtn').onclick = saveWorkflow;
+        $('saveTemplateBtn').onclick = saveTemplate;
+        $('saveWorkflowBtn2').onclick = saveWorkflow;
+        $('saveTemplateBtn2').onclick = saveTemplate;
 
         // ==================== BATCH MODE ====================
         let batchWorkflow = null;
