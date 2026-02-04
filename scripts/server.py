@@ -292,6 +292,43 @@ async def batch_run(request):
         except ValueError as e:
             return web.Response(text=str(e), status=400)
         
+        # Expand folder paths - if any value is a directory, expand to individual files
+        IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif'}
+        expanded_batch = []
+        
+        for inputs in batch_data:
+            folder_vars = {}
+            
+            # Find folder paths
+            for key, value in inputs.items():
+                if isinstance(value, str) and os.path.isdir(value):
+                    # List image files in folder
+                    files = []
+                    for f in sorted(os.listdir(value)):
+                        if os.path.splitext(f)[1].lower() in IMAGE_EXTENSIONS:
+                            files.append(os.path.join(value, f))
+                    if files:
+                        folder_vars[key] = files
+                        print(f"Expanding folder '{value}' -> {len(files)} images")
+            
+            if not folder_vars:
+                # No folders, keep as is
+                expanded_batch.append(inputs)
+            else:
+                # Expand based on first folder variable
+                primary_var = list(folder_vars.keys())[0]
+                for i, file_path in enumerate(folder_vars[primary_var]):
+                    new_inputs = inputs.copy()
+                    new_inputs[primary_var] = file_path
+                    # Handle other folder vars if any
+                    for other_var, other_files in folder_vars.items():
+                        if other_var != primary_var:
+                            new_inputs[other_var] = other_files[i] if i < len(other_files) else other_files[-1]
+                    expanded_batch.append(new_inputs)
+        
+        batch_data = expanded_batch
+        print(f"Total jobs after folder expansion: {len(batch_data)}")
+        
         server_addr = custom_server if custom_server else COMFY_SERVER
         client = ComfyUIClientAsync(server_addr, "dummy.json")
         
@@ -312,8 +349,25 @@ async def batch_run(request):
             for idx, inputs in enumerate(batch_data):
                 print(f"Running batch job {idx+1}/{len(batch_data)}...")
                 
+                # Upload local files to ComfyUI server
+                processed_inputs = {}
+                for key, value in inputs.items():
+                    if isinstance(value, str) and os.path.isfile(value):
+                        # Local file exists, upload to ComfyUI
+                        ext = os.path.splitext(value)[1].lower()
+                        if ext in IMAGE_EXTENSIONS:
+                            print(f"  Uploading {os.path.basename(value)}...")
+                            with open(value, 'rb') as f:
+                                file_data = f.read()
+                            uploaded_path = await client.upload_image_bytes(file_data, filename=os.path.basename(value))
+                            processed_inputs[key] = uploaded_path
+                        else:
+                            processed_inputs[key] = value
+                    else:
+                        processed_inputs[key] = value
+                
                 # Inject variables
-                final_workflow = WorkflowManager.inject_variables(workflow, inputs)
+                final_workflow = WorkflowManager.inject_variables(workflow, processed_inputs)
                 
                 # Run
                 results = await client.generate_from_workflow(final_workflow)
@@ -327,16 +381,12 @@ async def batch_run(request):
                         filepath = os.path.join(job_output_dir, filename)
                         data.save(filepath, format='PNG')
                         
-                        # Also return base64 for UI
-                        buf = io.BytesIO()
-                        data.save(buf, format='PNG')
-                        b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-                        
+                        # Return URL instead of base64 (much smaller response)
                         job_results["outputs"].append({
                             "node_id": node_id,
                             "type": "image",
                             "filename": filename,
-                            "data": f"data:image/png;base64,{b64}"
+                            "url": f"/api/outputs/{job_id}/{filename}"
                         })
                     else:
                         job_results["outputs"].append({
@@ -346,9 +396,11 @@ async def batch_run(request):
                         })
                 
                 all_results.append(job_results)
+                print(f"  Job {idx+1} completed with {len(job_results['outputs'])} outputs")
         finally:
             await client.close()
         
+        print(f"Batch completed. Sending response...")
         return web.json_response({
             "job_id": job_id,
             "total": len(batch_data),

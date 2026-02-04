@@ -345,15 +345,21 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                     <div class="form-group">
                         <label>Saved Workflow</label>
-                        <select id="batchWorkflowSelect">
-                            <option value="">-- Select Workflow --</option>
-                        </select>
+                        <div style="display: flex; gap: 8px;">
+                            <select id="batchWorkflowSelect" style="flex: 1;">
+                                <option value="">-- Select Workflow --</option>
+                            </select>
+                            <button class="btn btn-secondary" id="deleteWorkflowBtn" style="padding: 8px 12px;" title="Delete">🗑️</button>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label>Saved Template</label>
-                        <select id="batchTemplateSelect">
-                            <option value="">-- Select Template --</option>
-                        </select>
+                        <div style="display: flex; gap: 8px;">
+                            <select id="batchTemplateSelect" style="flex: 1;">
+                                <option value="">-- Select Template --</option>
+                            </select>
+                            <button class="btn btn-secondary" id="deleteTemplateBtn" style="padding: 8px 12px;" title="Delete">🗑️</button>
+                        </div>
                     </div>
                 </div>
                 <div class="btn-group">
@@ -369,6 +375,7 @@
                 <div class="btn-group">
                     <button class="btn btn-secondary" id="addBatchRowBtn">+ Add Row</button>
                     <button class="btn btn-primary" id="runBatchBtn">🚀 Run Batch</button>
+                    <button class="btn btn-secondary hidden" id="stopBatchBtn" style="background: var(--error);">⏹️ Stop</button>
                 </div>
             </div>
 
@@ -706,9 +713,14 @@
             renderBatchEditor();
         };
 
+        let batchAbortController = null;
+
         $('runBatchBtn').onclick = async () => {
             if (!batchWorkflow) { alert('Load a workflow first'); return; }
             
+            batchAbortController = new AbortController();
+            $('runBatchBtn').disabled = true;
+            show($('stopBatchBtn'));
             $('batchStatus').textContent = 'Running...';
             show($('batchResultsCard'));
             $('batchResults').innerHTML = '';
@@ -721,7 +733,8 @@
                         workflow: batchWorkflow,
                         batch: batchData,
                         server_address: $('serverAddress').value
-                    })
+                    }),
+                    signal: batchAbortController.signal
                 });
                 
                 if (!res.ok) throw new Error(await res.text());
@@ -736,7 +749,7 @@
                             const div = document.createElement('div');
                             div.className = 'result-item';
                             div.innerHTML = `
-                                <img src="${out.data}" alt="${out.filename}">
+                                <img src="${out.url}" alt="${out.filename}">
                                 <div class="info">Run ${result.index + 1}</div>
                             `;
                             gallery.appendChild(div);
@@ -744,8 +757,41 @@
                     });
                 });
             } catch (e) {
-                $('batchStatus').textContent = 'Error: ' + e.message;
+                if (e.name === 'AbortError') {
+                    $('batchStatus').textContent = 'Stopped by user';
+                } else {
+                    $('batchStatus').textContent = 'Error: ' + e.message;
+                }
+            } finally {
+                $('runBatchBtn').disabled = false;
+                hide($('stopBatchBtn'));
             }
+        };
+
+        $('stopBatchBtn').onclick = () => {
+            if (batchAbortController) {
+                batchAbortController.abort();
+            }
+        };
+
+        // Delete workflow
+        $('deleteWorkflowBtn').onclick = async () => {
+            const name = $('batchWorkflowSelect').value;
+            if (!name) { alert('Select a workflow first'); return; }
+            if (!confirm(`Delete workflow "${name}"?`)) return;
+            
+            await fetch(`/api/workflows/${name}`, { method: 'DELETE' });
+            loadSavedData();
+        };
+
+        // Delete template
+        $('deleteTemplateBtn').onclick = async () => {
+            const name = $('batchTemplateSelect').value;
+            if (!name) { alert('Select a template first'); return; }
+            if (!confirm(`Delete template "${name}"?`)) return;
+            
+            await fetch(`/api/templates/${name}`, { method: 'DELETE' });
+            loadSavedData();
         };
 
         // ==================== Init ====================
