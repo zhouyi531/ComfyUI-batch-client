@@ -33,6 +33,9 @@ OUTPUTS_DIR = os.path.join(DATA_DIR, "outputs")
 for d in [WORKFLOWS_DIR, TEMPLATES_DIR, OUTPUTS_DIR]:
     os.makedirs(d, exist_ok=True)
 
+# Active batch jobs for cancellation
+active_batch_jobs = {}  # job_id -> {"cancelled": bool, "results": [], "server": str}
+
 
 # ==================== Static Files ====================
 
@@ -279,6 +282,7 @@ async def batch_run(request):
     try:
         data = await request.json()
         workflow = data.get('workflow')
+        workflow_name = data.get('workflow_name', 'workflow')  # Get workflow name for output filenames
         batch_data = data.get('batch', [])  # List of input dicts
         custom_server = data.get('server_address')
         save_outputs = data.get('save_outputs', True)
@@ -336,7 +340,13 @@ async def batch_run(request):
         job_output_dir = os.path.join(OUTPUTS_DIR, job_id)
         os.makedirs(job_output_dir, exist_ok=True)
         
-        all_results = []
+        # Register job for cancellation tracking
+        active_batch_jobs[job_id] = {
+            "cancelled": False,
+            "results": [],
+            "server": server_addr,
+            "total": len(batch_data)
+        }
         
         await client.connect()
         
@@ -345,8 +355,15 @@ async def batch_run(request):
             return await client.generate()
         client.generate_from_workflow = generate_from_workflow
         
+        cancelled = False
         try:
             for idx, inputs in enumerate(batch_data):
+                # Check if cancelled
+                if active_batch_jobs.get(job_id, {}).get("cancelled"):
+                    print(f"Batch {job_id} cancelled at job {idx}")
+                    cancelled = True
+                    break
+                
                 print(f"Running batch job {idx+1}/{len(batch_data)}...")
                 
                 # Upload local files to ComfyUI server
@@ -372,12 +389,31 @@ async def batch_run(request):
                 # Run
                 results = await client.generate_from_workflow(final_workflow)
                 
+                # Extract source image name from inputs for filename
+                source_image_name = None
+                for key, value in inputs.items():
+                    if isinstance(value, str):
+                        # Check if it's a file path
+                        if os.path.isfile(value) or '/' in value or '\\' in value:
+                            basename = os.path.basename(value)
+                            name_without_ext = os.path.splitext(basename)[0]
+                            source_image_name = name_without_ext
+                            break
+                
+                if not source_image_name:
+                    source_image_name = f"run_{idx}"
+                
+                # Sanitize workflow name for filename
+                safe_workflow_name = "".join(c for c in workflow_name if c.isalnum() or c in ('-', '_')).strip()
+                if not safe_workflow_name:
+                    safe_workflow_name = "workflow"
+                
                 job_results = {"index": idx, "inputs": inputs, "outputs": []}
                 
                 for node_id, data in results.items():
                     if isinstance(data, Image.Image):
-                        # Save to file
-                        filename = f"run_{idx}_{node_id}.png"
+                        # Save to file with format: {original_image}_{workflow}.png
+                        filename = f"{source_image_name}_{safe_workflow_name}.png"
                         filepath = os.path.join(job_output_dir, filename)
                         data.save(filepath, format='PNG')
                         
@@ -395,22 +431,58 @@ async def batch_run(request):
                             "data": str(data)
                         })
                 
-                all_results.append(job_results)
+                # Store result
+                active_batch_jobs[job_id]["results"].append(job_results)
                 print(f"  Job {idx+1} completed with {len(job_results['outputs'])} outputs")
         finally:
             await client.close()
+            # Cleanup job tracking after a delay (keep for a while for status checks)
+            asyncio.get_event_loop().call_later(300, lambda: active_batch_jobs.pop(job_id, None))
         
-        print(f"Batch completed. Sending response...")
+        results_to_return = active_batch_jobs.get(job_id, {}).get("results", [])
+        completed = len(results_to_return)
+        
+        print(f"Batch {'cancelled' if cancelled else 'completed'}. {completed}/{len(batch_data)} jobs done.")
         return web.json_response({
             "job_id": job_id,
             "total": len(batch_data),
-            "results": all_results
+            "completed": completed,
+            "cancelled": cancelled,
+            "results": results_to_return
         })
         
     except Exception as e:
         import traceback
         traceback.print_exc()
         return web.Response(text=str(e), status=500)
+
+
+@routes.post('/api/batch/{job_id}/cancel')
+async def cancel_batch(request):
+    """Cancel a running batch job and interrupt ComfyUI"""
+    job_id = request.match_info['job_id']
+    
+    if job_id not in active_batch_jobs:
+        return web.json_response({"error": "Job not found or already completed"}, status=404)
+    
+    job = active_batch_jobs[job_id]
+    job["cancelled"] = True
+    
+    # Send interrupt to ComfyUI
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.post(f"http://{job['server']}/interrupt") as resp:
+                print(f"Sent interrupt to ComfyUI: {resp.status}")
+    except Exception as e:
+        print(f"Failed to send interrupt: {e}")
+    
+    return web.json_response({
+        "success": True,
+        "job_id": job_id,
+        "completed": len(job["results"]),
+        "results": job["results"]
+    })
 
 
 # ==================== Outputs API ====================

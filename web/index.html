@@ -714,11 +714,30 @@
         };
 
         let batchAbortController = null;
+        let currentBatchJobId = null;
+
+        function displayBatchResults(results) {
+            const gallery = $('batchResults');
+            results.forEach(result => {
+                result.outputs.forEach(out => {
+                    if (out.type === 'image') {
+                        const div = document.createElement('div');
+                        div.className = 'result-item';
+                        div.innerHTML = `
+                            <img src="${out.url}" alt="${out.filename}">
+                            <div class="info">Run ${result.index + 1}</div>
+                        `;
+                        gallery.appendChild(div);
+                    }
+                });
+            });
+        }
 
         $('runBatchBtn').onclick = async () => {
             if (!batchWorkflow) { alert('Load a workflow first'); return; }
             
             batchAbortController = new AbortController();
+            currentBatchJobId = null;
             $('runBatchBtn').disabled = true;
             show($('stopBatchBtn'));
             $('batchStatus').textContent = 'Running...';
@@ -731,6 +750,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         workflow: batchWorkflow,
+                        workflow_name: $('batchWorkflowSelect').value,
                         batch: batchData,
                         server_address: $('serverAddress').value
                     }),
@@ -740,25 +760,19 @@
                 if (!res.ok) throw new Error(await res.text());
                 
                 const data = await res.json();
-                $('batchStatus').textContent = `Completed ${data.total} jobs. Output: ${data.job_id}`;
+                currentBatchJobId = data.job_id;
                 
-                const gallery = $('batchResults');
-                data.results.forEach(result => {
-                    result.outputs.forEach(out => {
-                        if (out.type === 'image') {
-                            const div = document.createElement('div');
-                            div.className = 'result-item';
-                            div.innerHTML = `
-                                <img src="${out.url}" alt="${out.filename}">
-                                <div class="info">Run ${result.index + 1}</div>
-                            `;
-                            gallery.appendChild(div);
-                        }
-                    });
-                });
+                if (data.cancelled) {
+                    $('batchStatus').textContent = `Stopped: ${data.completed}/${data.total} completed. Output: ${data.job_id}`;
+                } else {
+                    $('batchStatus').textContent = `Completed ${data.completed}/${data.total} jobs. Output: ${data.job_id}`;
+                }
+                
+                displayBatchResults(data.results);
             } catch (e) {
                 if (e.name === 'AbortError') {
-                    $('batchStatus').textContent = 'Stopped by user';
+                    // Fetch was aborted, but we may have partial results via cancel API
+                    $('batchStatus').textContent = 'Stopping...';
                 } else {
                     $('batchStatus').textContent = 'Error: ' + e.message;
                 }
@@ -768,9 +782,35 @@
             }
         };
 
-        $('stopBatchBtn').onclick = () => {
+        $('stopBatchBtn').onclick = async () => {
             if (batchAbortController) {
                 batchAbortController.abort();
+            }
+            
+            // Call cancel API to get partial results and stop ComfyUI
+            $('batchStatus').textContent = 'Stopping and fetching completed results...';
+            
+            // Find job ID from status text or wait a bit for it to be set
+            await new Promise(r => setTimeout(r, 500));
+            
+            // Try to cancel via API - we need to know the job_id
+            // The job_id should be extracted from the batch call, but since we aborted
+            // we need to poll or use a different mechanism. For now, rely on server-side handling.
+            try {
+                // Get the most recent job from outputs
+                const outputsRes = await fetch('/api/outputs');
+                const outputs = await outputsRes.json();
+                if (outputs.length > 0) {
+                    const latestJob = outputs[0].job_id;
+                    const cancelRes = await fetch(`/api/batch/${latestJob}/cancel`, { method: 'POST' });
+                    if (cancelRes.ok) {
+                        const cancelData = await cancelRes.json();
+                        $('batchStatus').textContent = `Stopped: ${cancelData.completed} completed. Output: ${cancelData.job_id}`;
+                        displayBatchResults(cancelData.results);
+                    }
+                }
+            } catch (e) {
+                console.log('Cancel API error:', e);
             }
         };
 
