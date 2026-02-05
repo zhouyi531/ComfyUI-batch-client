@@ -160,7 +160,9 @@ class ComfyUIClientAsync:
             async with self.session.post(
                 f"http://{self.SERVER_ADDRESS}/prompt", json=payload
             ) as response:
-                response.raise_for_status()
+                if response.status != 200:
+                    error_text = await response.text()
+                    raise ConnectionError(f"Failed to queue prompt: {response.status} - {error_text}")
                 result = await response.json()
                 if "prompt_id" not in result:
                     raise ValueError("Server response missing prompt_id")
@@ -301,13 +303,29 @@ class ComfyUIClientAsync:
         except Exception as e:
             raise RuntimeError(f"Error preparing image for upload: {e}")
 
-    async def upload_image_bytes(self, image_data: bytes, filename="temp.png", subfolder="input") -> str:
+    async def upload_image_bytes(self, image_data: bytes, filename="temp.png", subfolder="") -> str:
         """
         Upload raw image bytes to ComfyUI server.
         """
+        # Determine content-type based on extension
+        ext = filename.lower().split('.')[-1] if '.' in filename else 'png'
+        content_types = {
+            'png': 'image/png',
+            'jpg': 'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'gif': 'image/gif',
+            'webp': 'image/webp',
+            'bmp': 'image/bmp'
+        }
+        content_type = content_types.get(ext, 'image/png')
+        
+        print(f"    Uploading to ComfyUI: {filename} ({len(image_data)} bytes, {content_type})")
+        
         data = aiohttp.FormData()
-        data.add_field("image", image_data, filename=filename)
-        data.add_field("subfolder", subfolder)
+        data.add_field("image", image_data, filename=filename, content_type=content_type)
+        if subfolder:
+            data.add_field("subfolder", subfolder)
+        data.add_field("overwrite", "true")
 
         async with self.session.post(
             f"http://{self.SERVER_ADDRESS}/upload/image", data=data
@@ -320,10 +338,26 @@ class ComfyUIClientAsync:
                  text = await response.text()
                  raise RuntimeError(f"Upload failed: {response.status} {text} - {e}")
 
+            print(f"    ComfyUI upload response: {resp_json}")
+            
             if "name" not in resp_json or "subfolder" not in resp_json:
                 raise ValueError(
                     "Invalid upload response: missing required fields"
                 )
+            
+            # Verify the file exists by trying to fetch it
+            uploaded_name = resp_json.get("name")
+            uploaded_subfolder = resp_json.get("subfolder")
+            try:
+                verify_params = {"filename": uploaded_name, "subfolder": uploaded_subfolder, "type": "input"}
+                async with self.session.get(f"http://{self.SERVER_ADDRESS}/view", params=verify_params) as verify_resp:
+                    if verify_resp.status == 200:
+                        verify_data = await verify_resp.read()
+                        print(f"    Verified file on ComfyUI: {len(verify_data)} bytes")
+                    else:
+                        print(f"    WARNING: Could not verify file on ComfyUI: {verify_resp.status}")
+            except Exception as e:
+                print(f"    WARNING: Failed to verify file: {e}")
             
             return resp_json.get("subfolder") + "/" + resp_json.get("name")
 

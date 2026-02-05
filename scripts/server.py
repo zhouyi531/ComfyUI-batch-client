@@ -176,6 +176,86 @@ async def delete_template(request):
     return web.json_response({"success": True})
 
 
+# ==================== File Upload API ====================
+
+UPLOADS_DIR = os.path.join(DATA_DIR, "uploads")
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+
+@routes.post('/api/upload')
+async def upload_file(request):
+    """Upload a file to server for batch processing"""
+    try:
+        reader = await request.multipart()
+        
+        while True:
+            part = await reader.next()
+            if part is None:
+                break
+            
+            if part.name == 'file':
+                filename = part.filename or f"upload_{uuid.uuid4().hex[:8]}"
+                # Get extension from original filename
+                ext = os.path.splitext(filename)[1].lower() or '.png'
+                # Generate safe ASCII filename to avoid encoding issues with ComfyUI
+                safe_filename = f"upload_{int(time.time())}_{uuid.uuid4().hex[:6]}{ext}"
+                
+                filepath = os.path.join(UPLOADS_DIR, safe_filename)
+                
+                # Read all file data
+                file_data = await part.read()
+                total_bytes = len(file_data)
+                
+                # Save file
+                with open(filepath, 'wb') as f:
+                    f.write(file_data)
+                
+                # Validate image
+                valid = False
+                try:
+                    img = Image.open(io.BytesIO(file_data))
+                    img.verify()
+                    valid = True
+                    print(f"Uploaded file saved: {filepath} ({total_bytes} bytes, {img.format} {img.size if hasattr(img, 'size') else 'unknown'})")
+                except Exception as e:
+                    print(f"Uploaded file saved but invalid image: {filepath} ({total_bytes} bytes) - {e}")
+                
+                return web.json_response({
+                    "success": True,
+                    "filename": safe_filename,
+                    "path": filepath,
+                    "size": total_bytes,
+                    "valid": valid
+                })
+        
+        return web.Response(text="No file provided", status=400)
+    except Exception as e:
+        return web.Response(text=str(e), status=500)
+
+
+# ==================== Server Status API ====================
+
+@routes.get('/api/server/status')
+async def server_status(request):
+    """Check ComfyUI server connection status"""
+    custom_server = request.query.get('server')
+    server_addr = custom_server if custom_server else COMFY_SERVER
+    
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            # Use /queue endpoint which is standard in ComfyUI
+            async with session.get(f"http://{server_addr}/queue", timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                # ComfyUI returns 200 for /queue even if queue is empty
+                if resp.status == 200:
+                    return web.json_response({"status": "connected", "server": server_addr})
+                else:
+                    return web.json_response({"status": "error", "server": server_addr, "code": resp.status})
+    except asyncio.TimeoutError:
+        return web.json_response({"status": "timeout", "server": server_addr})
+    except Exception as e:
+        return web.json_response({"status": "disconnected", "server": server_addr, "error": str(e)})
+
+
 # ==================== Scanning API ====================
 
 @routes.post('/api/scan')
@@ -235,8 +315,17 @@ async def run(request):
         for key, val in inputs.items():
             if isinstance(val, dict) and 'data' in val:
                 print(f"Uploading {key}...")
-                server_path = await client.upload_image_bytes(val['data'], filename=val['filename'])
+                # Generate safe ASCII filename to avoid encoding issues
+                original_name = val['filename']
+                ext = os.path.splitext(original_name)[1].lower() or '.png'
+                safe_name = f"upload_{int(time.time())}_{uuid.uuid4().hex[:6]}{ext}"
+                
+                server_path = await client.upload_image_bytes(val['data'], filename=safe_name)
+                # ComfyUI LoadImage expects just the filename, not subfolder/filename
+                if '/' in server_path:
+                    server_path = server_path.split('/')[-1]
                 processed_inputs[key] = server_path
+                print(f"  -> Uploaded as: {server_path}")
         
         try:
             workflow_json = WorkflowManager.ensure_api_format(workflow_json)
@@ -373,11 +462,24 @@ async def batch_run(request):
                         # Local file exists, upload to ComfyUI
                         ext = os.path.splitext(value)[1].lower()
                         if ext in IMAGE_EXTENSIONS:
-                            print(f"  Uploading {os.path.basename(value)}...")
+                            original_name = os.path.basename(value)
+                            file_size = os.path.getsize(value)
+                            print(f"  Uploading {original_name} ({file_size} bytes)...")
+                            
+                            # Generate safe ASCII filename to avoid encoding issues
+                            safe_name = f"upload_{int(time.time())}_{uuid.uuid4().hex[:6]}{ext}"
+                            
                             with open(value, 'rb') as f:
                                 file_data = f.read()
-                            uploaded_path = await client.upload_image_bytes(file_data, filename=os.path.basename(value))
+                            
+                            print(f"    Read {len(file_data)} bytes from file")
+                            
+                            uploaded_path = await client.upload_image_bytes(file_data, filename=safe_name)
+                            # ComfyUI LoadImage expects just the filename, not subfolder/filename
+                            if '/' in uploaded_path:
+                                uploaded_path = uploaded_path.split('/')[-1]
                             processed_inputs[key] = uploaded_path
+                            print(f"    -> Uploaded as: {uploaded_path}")
                         else:
                             processed_inputs[key] = value
                     else:
@@ -385,6 +487,15 @@ async def batch_run(request):
                 
                 # Inject variables
                 final_workflow = WorkflowManager.inject_variables(workflow, processed_inputs)
+                
+                # Debug: print injected values
+                print(f"  Injected inputs: {processed_inputs}")
+                
+                # Debug: print the LoadImage node before and after injection
+                if "7" in workflow:
+                    print(f"  Node 7 BEFORE: {json.dumps(workflow['7'], indent=2)}")
+                if "7" in final_workflow:
+                    print(f"  Node 7 AFTER:  {json.dumps(final_workflow['7'], indent=2)}")
                 
                 # Run
                 results = await client.generate_from_workflow(final_workflow)

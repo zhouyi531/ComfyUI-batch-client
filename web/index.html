@@ -63,6 +63,26 @@
             width: 180px;
             font-size: 0.85rem;
         }
+        .server-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            border-radius: 6px;
+            background: var(--input-bg);
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-secondary);
+            transition: background 0.3s;
+        }
+        .status-dot.connected { background: var(--success); box-shadow: 0 0 6px var(--success); }
+        .status-dot.disconnected { background: var(--error); box-shadow: 0 0 6px var(--error); }
+        .status-dot.checking { background: #fbbf24; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
         /* Tabs */
         .tabs {
@@ -238,6 +258,40 @@
         }
         .batch-row input:focus { outline: none; border-color: var(--accent); }
         .row-actions { display: flex; gap: 4px; }
+        
+        /* File input container */
+        .file-input-container {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+        .file-input-container input[type="text"] {
+            flex: 1;
+            min-width: 0;
+        }
+        .file-input-container .file-btn {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            color: var(--text-secondary);
+            padding: 10px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+        .file-input-container .file-btn:hover {
+            background: rgba(255,255,255,0.08);
+            color: var(--text-primary);
+        }
+        .file-input-container .folder-btn {
+            background: var(--accent);
+            color: #1e1b4b;
+            border: none;
+        }
+        .file-input-container .folder-btn:hover {
+            opacity: 0.9;
+        }
         .row-actions button {
             background: var(--card-bg);
             border: 1px solid var(--card-border);
@@ -256,13 +310,17 @@
             <div class="server-config">
                 <label>Server:</label>
                 <input type="text" id="serverAddress" value="192.168.1.21:8188" placeholder="127.0.0.1:8188">
+                <div class="server-status">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span id="statusText">Checking...</span>
+                </div>
             </div>
         </header>
 
         <!-- Tabs -->
         <div class="tabs">
-            <button class="tab active" data-tab="single">🎯 Single Run</button>
-            <button class="tab" data-tab="batch">📦 Batch Mode</button>
+            <button class="tab active" data-tab="single">📋 Data Template Builder</button>
+            <button class="tab" data-tab="batch">🚀 Run Mode</button>
         </div>
 
         <!-- ==================== SINGLE RUN TAB ==================== -->
@@ -270,14 +328,29 @@
             
             <!-- Step 1: Upload -->
             <div class="card" id="step1">
-                <h2><span class="step-badge">1</span> Upload Workflow</h2>
+                <h2><span class="step-badge">1</span> Load Workflow</h2>
+                
+                <!-- Load from saved workflows -->
+                <div class="form-group">
+                    <label>Load Saved Workflow</label>
+                    <div style="display: flex; gap: 8px;">
+                        <select id="singleWorkflowSelect" style="flex: 1;">
+                            <option value="">-- Select Saved Workflow --</option>
+                        </select>
+                        <button class="btn btn-secondary" id="loadSingleWorkflowBtn">Load</button>
+                    </div>
+                </div>
+                
+                <div style="text-align: center; color: var(--text-secondary); margin: 16px 0; font-size: 0.85rem;">— OR —</div>
+                
+                <!-- Upload new workflow -->
                 <div class="drop-zone" id="dropZone">
                     <p>Drag & drop <strong>workflow.json</strong> or click to browse</p>
                     <input type="file" id="fileInput" accept=".json" style="display:none;">
                 </div>
                 <textarea id="workflowJson" placeholder="Or paste workflow JSON here..."></textarea>
                 <div class="btn-group">
-                    <button class="btn btn-primary" id="scanBtn">Scan Workflow</button>
+                    <button class="btn btn-primary" id="scanBtn" disabled>Scan Workflow</button>
                 </div>
                 <div id="scanError" class="error-msg hidden"></div>
             </div>
@@ -311,9 +384,9 @@
                 <h2><span class="step-badge">3</span> Configure & Run</h2>
                 <form id="inputForm"></form>
                 <div class="btn-group">
-                    <button class="btn btn-primary" id="runBtn">🚀 Run</button>
-                    <button class="btn btn-secondary" id="saveWorkflowBtn">💾 Save Workflow</button>
-                    <button class="btn btn-secondary" id="saveTemplateBtn">📋 Save Template</button>
+                    <button class="btn btn-primary" id="saveWorkflowBtn">💾 Save Workflow</button>
+                    <button class="btn btn-primary" id="saveTemplateBtn">📋 Save Data Template</button>
+                    <button class="btn btn-secondary" id="runBtn">🧪 Test Run</button>
                     <button class="btn btn-secondary" id="backToStep2">Back</button>
                 </div>
                 <div id="runError" class="error-msg hidden"></div>
@@ -329,8 +402,8 @@
                 <div id="results" class="results-grid"></div>
                 <div class="btn-group">
                     <button class="btn btn-primary" id="saveWorkflowBtn2">💾 Save Workflow</button>
-                    <button class="btn btn-primary" id="saveTemplateBtn2">📋 Save Template</button>
-                    <button class="btn btn-secondary" id="runAgainBtn">Run Again</button>
+                    <button class="btn btn-primary" id="saveTemplateBtn2">📋 Save Data Template</button>
+                    <button class="btn btn-secondary" id="runAgainBtn">Test Again</button>
                     <button class="btn btn-secondary" id="startOverBtn">Start Over</button>
                 </div>
             </div>
@@ -403,10 +476,83 @@
             };
         });
 
-        // ==================== SINGLE RUN MODE ====================
+        // ==================== SERVER STATUS ====================
+        let statusCheckInterval = null;
+        
+        async function checkServerStatus() {
+            const dot = $('statusDot');
+            const text = $('statusText');
+            const server = $('serverAddress').value;
+            
+            dot.className = 'status-dot checking';
+            text.textContent = 'Checking...';
+            
+            try {
+                const res = await fetch(`/api/server/status?server=${encodeURIComponent(server)}`);
+                const data = await res.json();
+                
+                if (data.status === 'connected') {
+                    dot.className = 'status-dot connected';
+                    text.textContent = 'Connected';
+                } else {
+                    dot.className = 'status-dot disconnected';
+                    text.textContent = data.status === 'timeout' ? 'Timeout' : 'Disconnected';
+                }
+            } catch (e) {
+                dot.className = 'status-dot disconnected';
+                text.textContent = 'Error';
+            }
+        }
+        
+        // Check status on load and when server address changes
+        checkServerStatus();
+        $('serverAddress').onchange = checkServerStatus;
+        $('serverAddress').onblur = checkServerStatus;
+        
+        // Periodic status check every 30 seconds
+        statusCheckInterval = setInterval(checkServerStatus, 30000);
+
+        // ==================== DATA TEMPLATE BUILDER ====================
         let currentWorkflow = null;
+        let currentWorkflowName = null;
         let allInputs = [];
         let selectedInputs = [];
+
+        // Load saved workflows for single mode
+        async function loadSingleWorkflows() {
+            const wfRes = await fetch('/api/workflows');
+            const workflows = await wfRes.json();
+            const select = $('singleWorkflowSelect');
+            select.innerHTML = '<option value="">-- Select Saved Workflow --</option>';
+            workflows.forEach(w => {
+                select.innerHTML += `<option value="${w.name}">${w.name}</option>`;
+            });
+        }
+        
+        // Enable/disable Scan button based on workflow content
+        function updateScanButtonState() {
+            const hasContent = $('workflowJson').value.trim().length > 0;
+            $('scanBtn').disabled = !hasContent;
+        }
+        
+        // Monitor textarea for changes
+        $('workflowJson').oninput = updateScanButtonState;
+        
+        $('loadSingleWorkflowBtn').onclick = async () => {
+            const name = $('singleWorkflowSelect').value;
+            if (!name) { alert('Please select a workflow'); return; }
+            
+            try {
+                const res = await fetch(`/api/workflows/${name}`);
+                if (!res.ok) throw new Error('Failed to load workflow');
+                const workflow = await res.json();
+                $('workflowJson').value = JSON.stringify(workflow, null, 2);
+                currentWorkflowName = name;
+                updateScanButtonState();
+            } catch (e) {
+                alert('Error loading workflow: ' + e.message);
+            }
+        };
 
         // File handling
         $('dropZone').onclick = () => $('fileInput').click();
@@ -418,7 +564,10 @@
         function handleFile(file) {
             if (file && file.name.endsWith('.json')) {
                 const reader = new FileReader();
-                reader.onload = e => { $('workflowJson').value = e.target.result; };
+                reader.onload = e => { 
+                    $('workflowJson').value = e.target.result;
+                    updateScanButtonState();
+                };
                 reader.readAsText(file);
             }
         }
@@ -672,6 +821,22 @@
             show($('batchEditorCard'));
         };
 
+        // Detect if a field is likely a file type
+        function isFileType(variable) {
+            const field = (variable.field || variable.alias || '').toLowerCase();
+            const fileKeywords = ['image', 'video', 'audio', 'file', 'path', 'media', 'input_image', 'source'];
+            return fileKeywords.some(kw => field.includes(kw));
+        }
+        
+        // Get accepted file types based on field name
+        function getAcceptTypes(variable) {
+            const field = (variable.field || variable.alias || '').toLowerCase();
+            if (field.includes('image')) return 'image/*';
+            if (field.includes('video')) return 'video/*';
+            if (field.includes('audio')) return 'audio/*';
+            return 'image/*,video/*,audio/*,.txt,.json';
+        }
+
         function renderBatchEditor() {
             const editor = $('batchEditor');
             editor.innerHTML = '';
@@ -681,13 +846,55 @@
                 rowDiv.className = 'batch-row';
                 rowDiv.style.gridTemplateColumns = `repeat(${batchVariables.length}, 1fr) auto`;
                 
-                batchVariables.forEach(v => {
-                    const input = document.createElement('input');
-                    input.type = 'text';
-                    input.placeholder = v.alias;
-                    input.value = row[v.id] || '';
-                    input.oninput = () => { batchData[idx][v.id] = input.value; };
-                    rowDiv.appendChild(input);
+                batchVariables.forEach((v, vIdx) => {
+                    if (isFileType(v)) {
+                        // File type - create container with text input + upload button
+                        const container = document.createElement('div');
+                        container.className = 'file-input-container';
+                        
+                        const textInput = document.createElement('input');
+                        textInput.type = 'text';
+                        textInput.placeholder = `${v.alias} (path or folder)`;
+                        textInput.value = row[v.id] || '';
+                        textInput.oninput = () => { batchData[idx][v.id] = textInput.value; };
+                        
+                        const fileInput = document.createElement('input');
+                        fileInput.type = 'file';
+                        fileInput.accept = getAcceptTypes(v);
+                        fileInput.style.display = 'none';
+                        fileInput.id = `file_${idx}_${vIdx}`;
+                        fileInput.onchange = (e) => {
+                            if (e.target.files.length > 0) {
+                                const file = e.target.files[0];
+                                // Store file path (for local files, we use the name as placeholder)
+                                // In real usage, user typically enters server path or uploads
+                                textInput.value = file.name;
+                                batchData[idx][v.id] = file.name;
+                                // Store the actual file for potential upload
+                                if (!batchData[idx]._files) batchData[idx]._files = {};
+                                batchData[idx]._files[v.id] = file;
+                            }
+                        };
+                        
+                        const uploadBtn = document.createElement('button');
+                        uploadBtn.className = 'file-btn';
+                        uploadBtn.textContent = '📁';
+                        uploadBtn.title = 'Upload file';
+                        uploadBtn.onclick = () => fileInput.click();
+                        
+                        container.appendChild(textInput);
+                        container.appendChild(fileInput);
+                        container.appendChild(uploadBtn);
+                        rowDiv.appendChild(container);
+                    } else {
+                        // Regular text/number input
+                        const input = document.createElement('input');
+                        input.type = v.type === 'number' ? 'number' : 'text';
+                        input.placeholder = v.alias;
+                        input.value = row[v.id] || '';
+                        input.oninput = () => { batchData[idx][v.id] = input.value; };
+                        rowDiv.appendChild(input);
+                    }
                 });
                 
                 const actions = document.createElement('div');
@@ -733,6 +940,44 @@
             });
         }
 
+        // Upload files that were selected via browser file picker
+        async function uploadBrowserFiles() {
+            const uploadPromises = [];
+            
+            for (let idx = 0; idx < batchData.length; idx++) {
+                const row = batchData[idx];
+                if (row._files) {
+                    for (const [varId, file] of Object.entries(row._files)) {
+                        console.log(`Uploading file for ${varId}: ${file.name} (${file.size} bytes)`);
+                        uploadPromises.push(
+                            (async () => {
+                                const formData = new FormData();
+                                formData.append('file', file);
+                                
+                                const res = await fetch('/api/upload', {
+                                    method: 'POST',
+                                    body: formData
+                                });
+                                
+                                if (res.ok) {
+                                    const data = await res.json();
+                                    console.log(`Upload success: ${data.path} (${data.size} bytes)`);
+                                    // Update the batch data with server path
+                                    batchData[idx][varId] = data.path;
+                                } else {
+                                    console.error(`Upload failed: ${res.status}`);
+                                }
+                            })()
+                        );
+                    }
+                }
+            }
+            
+            if (uploadPromises.length > 0) {
+                await Promise.all(uploadPromises);
+            }
+        }
+
         $('runBatchBtn').onclick = async () => {
             if (!batchWorkflow) { alert('Load a workflow first'); return; }
             
@@ -740,18 +985,30 @@
             currentBatchJobId = null;
             $('runBatchBtn').disabled = true;
             show($('stopBatchBtn'));
-            $('batchStatus').textContent = 'Running...';
+            $('batchStatus').textContent = 'Uploading files...';
             show($('batchResultsCard'));
             $('batchResults').innerHTML = '';
 
             try {
+                // First upload any browser-selected files
+                await uploadBrowserFiles();
+                
+                $('batchStatus').textContent = 'Running...';
+                
+                // Clean up _files from batch data before sending
+                const cleanBatchData = batchData.map(row => {
+                    const clean = {...row};
+                    delete clean._files;
+                    return clean;
+                });
+                
                 const res = await fetch('/api/batch', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         workflow: batchWorkflow,
                         workflow_name: $('batchWorkflowSelect').value,
-                        batch: batchData,
+                        batch: cleanBatchData,
                         server_address: $('serverAddress').value
                     }),
                     signal: batchAbortController.signal
@@ -836,6 +1093,7 @@
 
         // ==================== Init ====================
         loadSavedData();
+        loadSingleWorkflows();
     </script>
 </body>
 </html>

@@ -9,6 +9,7 @@ env/
 .venv/
 .env
 
+
 # IDE
 .idea/
 .vscode/
@@ -24,6 +25,7 @@ Thumbs.db
 data/outputs/
 data/workflows/
 data/templates/
+data/uploads/
 
 # Logs
 *.log
