@@ -243,21 +243,60 @@
         
         /* Batch specific */
         .batch-row {
-            display: grid;
-            gap: 8px;
-            margin-bottom: 8px;
-            align-items: center;
-        }
-        .batch-row input {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 16px;
+            padding: 16px;
             background: var(--input-bg);
+            border-radius: 12px;
+            border: 1px solid var(--card-border);
+            align-items: flex-end;
+        }
+        .batch-row:hover {
+            border-color: var(--accent);
+        }
+        .batch-row .row-number {
+            position: absolute;
+            top: -8px;
+            left: 12px;
+            background: var(--accent);
+            color: #1e1b4b;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+        .batch-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex: 1 1 200px;
+            min-width: 150px;
+            max-width: 100%;
+        }
+        .batch-field label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        .batch-field input {
+            background: rgba(0,0,0,0.2);
             border: 1px solid var(--card-border);
             color: var(--text-primary);
             padding: 10px 12px;
             border-radius: 8px;
             font-size: 0.85rem;
+            width: 100%;
         }
-        .batch-row input:focus { outline: none; border-color: var(--accent); }
-        .row-actions { display: flex; gap: 4px; }
+        .batch-field input:focus { outline: none; border-color: var(--accent); }
+        .row-actions { 
+            display: flex; 
+            gap: 4px; 
+            flex-shrink: 0;
+            align-self: flex-end;
+            padding-bottom: 2px;
+        }
         
         /* File input container */
         .file-input-container {
@@ -268,9 +307,19 @@
         .file-input-container input[type="text"] {
             flex: 1;
             min-width: 0;
+            background: rgba(0,0,0,0.2);
+            border: 1px solid var(--card-border);
+            color: var(--text-primary);
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+        }
+        .file-input-container input[type="text"]:focus {
+            outline: none;
+            border-color: var(--accent);
         }
         .file-input-container .file-btn {
-            background: var(--card-bg);
+            background: rgba(255,255,255,0.1);
             border: 1px solid var(--card-border);
             color: var(--text-secondary);
             padding: 10px 12px;
@@ -281,7 +330,7 @@
             transition: all 0.2s;
         }
         .file-input-container .file-btn:hover {
-            background: rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.15);
             color: var(--text-primary);
         }
         .file-input-container .folder-btn {
@@ -844,9 +893,24 @@
             batchData.forEach((row, idx) => {
                 const rowDiv = document.createElement('div');
                 rowDiv.className = 'batch-row';
-                rowDiv.style.gridTemplateColumns = `repeat(${batchVariables.length}, 1fr) auto`;
+                rowDiv.style.position = 'relative';
+                
+                // Row number badge
+                const rowNum = document.createElement('span');
+                rowNum.className = 'row-number';
+                rowNum.textContent = `#${idx + 1}`;
+                rowDiv.appendChild(rowNum);
                 
                 batchVariables.forEach((v, vIdx) => {
+                    // Create field container with label
+                    const fieldDiv = document.createElement('div');
+                    fieldDiv.className = 'batch-field';
+                    
+                    const label = document.createElement('label');
+                    label.textContent = v.alias || v.field;
+                    label.title = `${v.node_title || ''} → ${v.field}`;
+                    fieldDiv.appendChild(label);
+                    
                     if (isFileType(v)) {
                         // File type - create container with text input + upload button
                         const container = document.createElement('div');
@@ -854,7 +918,7 @@
                         
                         const textInput = document.createElement('input');
                         textInput.type = 'text';
-                        textInput.placeholder = `${v.alias} (path or folder)`;
+                        textInput.placeholder = 'path or folder';
                         textInput.value = row[v.id] || '';
                         textInput.oninput = () => { batchData[idx][v.id] = textInput.value; };
                         
@@ -866,11 +930,8 @@
                         fileInput.onchange = (e) => {
                             if (e.target.files.length > 0) {
                                 const file = e.target.files[0];
-                                // Store file path (for local files, we use the name as placeholder)
-                                // In real usage, user typically enters server path or uploads
                                 textInput.value = file.name;
                                 batchData[idx][v.id] = file.name;
-                                // Store the actual file for potential upload
                                 if (!batchData[idx]._files) batchData[idx]._files = {};
                                 batchData[idx]._files[v.id] = file;
                             }
@@ -885,16 +946,18 @@
                         container.appendChild(textInput);
                         container.appendChild(fileInput);
                         container.appendChild(uploadBtn);
-                        rowDiv.appendChild(container);
+                        fieldDiv.appendChild(container);
                     } else {
                         // Regular text/number input
                         const input = document.createElement('input');
                         input.type = v.type === 'number' ? 'number' : 'text';
-                        input.placeholder = v.alias;
+                        input.placeholder = v.type === 'number' ? '0' : 'value';
                         input.value = row[v.id] || '';
                         input.oninput = () => { batchData[idx][v.id] = input.value; };
-                        rowDiv.appendChild(input);
+                        fieldDiv.appendChild(input);
                     }
+                    
+                    rowDiv.appendChild(fieldDiv);
                 });
                 
                 const actions = document.createElement('div');
