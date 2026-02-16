@@ -553,6 +553,23 @@ async def batch_run(request):
         results_to_return = active_batch_jobs.get(job_id, {}).get("results", [])
         completed = len(results_to_return)
         
+        # Save parameters.json to the output directory
+        parameters_info = {
+            "job_id": job_id,
+            "workflow_name": workflow_name,
+            "server_address": server_addr,
+            "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "total_jobs": len(batch_data),
+            "completed_jobs": completed,
+            "cancelled": cancelled,
+            "batch_inputs": batch_data,
+            "results": results_to_return
+        }
+        parameters_path = os.path.join(job_output_dir, "parameters.json")
+        with open(parameters_path, 'w', encoding='utf-8') as f:
+            json.dump(parameters_info, f, indent=2, ensure_ascii=False)
+        print(f"Saved parameters to {parameters_path}")
+        
         print(f"Batch {'cancelled' if cancelled else 'completed'}. {completed}/{len(batch_data)} jobs done.")
         return web.json_response({
             "job_id": job_id,
