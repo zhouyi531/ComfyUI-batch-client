@@ -36,6 +36,9 @@ for d in [WORKFLOWS_DIR, TEMPLATES_DIR, OUTPUTS_DIR]:
 # Active batch jobs for cancellation
 active_batch_jobs = {}  # job_id -> {"cancelled": bool, "results": [], "server": str}
 
+IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif'}
+AUDIO_EXTENSIONS = {'.mp3', '.wav', '.flac', '.ogg', '.aac', '.m4a'}
+
 
 # ==================== Static Files ====================
 
@@ -315,13 +318,15 @@ async def run(request):
         for key, val in inputs.items():
             if isinstance(val, dict) and 'data' in val:
                 print(f"Uploading {key}...")
-                # Generate safe ASCII filename to avoid encoding issues
                 original_name = val['filename']
                 ext = os.path.splitext(original_name)[1].lower() or '.png'
                 safe_name = f"upload_{int(time.time())}_{uuid.uuid4().hex[:6]}{ext}"
-                
-                server_path = await client.upload_image_bytes(val['data'], filename=safe_name)
-                # ComfyUI LoadImage expects just the filename, not subfolder/filename
+
+                if ext in AUDIO_EXTENSIONS:
+                    server_path = await client.upload_audio_bytes(val['data'], filename=safe_name)
+                else:
+                    server_path = await client.upload_image_bytes(val['data'], filename=safe_name)
+                # ComfyUI nodes expect just the filename, not subfolder/filename
                 if '/' in server_path:
                     server_path = server_path.split('/')[-1]
                 processed_inputs[key] = server_path
@@ -339,19 +344,29 @@ async def run(request):
         
         resp_data = {}
         for node_id, data in results.items():
-             if isinstance(data, Image.Image):
-                 buf = io.BytesIO()
-                 data.save(buf, format='PNG')
-                 b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-                 resp_data[node_id] = {
-                     'type': 'image',
-                     'data': f'data:image/png;base64,{b64}'
-                 }
-             else:
-                 resp_data[node_id] = {
-                     'type': 'text',
-                     'data': str(data)
-                 }
+            if isinstance(data, Image.Image):
+                buf = io.BytesIO()
+                data.save(buf, format='PNG')
+                b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+                resp_data[node_id] = {
+                    'type': 'image',
+                    'data': f'data:image/png;base64,{b64}'
+                }
+            elif isinstance(data, dict) and data.get('_type') == 'audio':
+                ext = os.path.splitext(data['filename'])[1].lstrip('.') or 'flac'
+                mime_types = {'mp3': 'audio/mpeg', 'wav': 'audio/wav', 'flac': 'audio/flac', 'ogg': 'audio/ogg', 'aac': 'audio/aac', 'm4a': 'audio/mp4'}
+                mime = mime_types.get(ext, 'audio/flac')
+                b64 = base64.b64encode(data['data']).decode('utf-8')
+                resp_data[node_id] = {
+                    'type': 'audio',
+                    'filename': data['filename'],
+                    'data': f'data:{mime};base64,{b64}'
+                }
+            else:
+                resp_data[node_id] = {
+                    'type': 'text',
+                    'data': str(data)
+                }
 
         return web.json_response(resp_data)
         
@@ -386,7 +401,6 @@ async def batch_run(request):
             return web.Response(text=str(e), status=400)
         
         # Expand folder paths - if any value is a directory, expand to individual files
-        IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif'}
         expanded_batch = []
         
         for inputs in batch_data:
@@ -461,21 +475,28 @@ async def batch_run(request):
                     if isinstance(value, str) and os.path.isfile(value):
                         # Local file exists, upload to ComfyUI
                         ext = os.path.splitext(value)[1].lower()
+                        original_name = os.path.basename(value)
+                        file_size = os.path.getsize(value)
+                        safe_name = f"upload_{int(time.time())}_{uuid.uuid4().hex[:6]}{ext}"
+
                         if ext in IMAGE_EXTENSIONS:
-                            original_name = os.path.basename(value)
-                            file_size = os.path.getsize(value)
-                            print(f"  Uploading {original_name} ({file_size} bytes)...")
-                            
-                            # Generate safe ASCII filename to avoid encoding issues
-                            safe_name = f"upload_{int(time.time())}_{uuid.uuid4().hex[:6]}{ext}"
-                            
+                            print(f"  Uploading image {original_name} ({file_size} bytes)...")
                             with open(value, 'rb') as f:
                                 file_data = f.read()
-                            
                             print(f"    Read {len(file_data)} bytes from file")
-                            
                             uploaded_path = await client.upload_image_bytes(file_data, filename=safe_name)
                             # ComfyUI LoadImage expects just the filename, not subfolder/filename
+                            if '/' in uploaded_path:
+                                uploaded_path = uploaded_path.split('/')[-1]
+                            processed_inputs[key] = uploaded_path
+                            print(f"    -> Uploaded as: {uploaded_path}")
+                        elif ext in AUDIO_EXTENSIONS:
+                            print(f"  Uploading audio {original_name} ({file_size} bytes)...")
+                            with open(value, 'rb') as f:
+                                file_data = f.read()
+                            print(f"    Read {len(file_data)} bytes from file")
+                            uploaded_path = await client.upload_audio_bytes(file_data, filename=safe_name)
+                            # ComfyUI LoadAudio expects just the filename
                             if '/' in uploaded_path:
                                 uploaded_path = uploaded_path.split('/')[-1]
                             processed_inputs[key] = uploaded_path
@@ -527,11 +548,21 @@ async def batch_run(request):
                         filename = f"{source_image_name}_{safe_workflow_name}.png"
                         filepath = os.path.join(job_output_dir, filename)
                         data.save(filepath, format='PNG')
-                        
-                        # Return URL instead of base64 (much smaller response)
                         job_results["outputs"].append({
                             "node_id": node_id,
                             "type": "image",
+                            "filename": filename,
+                            "url": f"/api/outputs/{job_id}/{filename}"
+                        })
+                    elif isinstance(data, dict) and data.get("_type") == "audio":
+                        ext = os.path.splitext(data["filename"])[1] or ".flac"
+                        filename = f"{source_image_name}_{safe_workflow_name}{ext}"
+                        filepath = os.path.join(job_output_dir, filename)
+                        with open(filepath, 'wb') as f:
+                            f.write(data["data"])
+                        job_results["outputs"].append({
+                            "node_id": node_id,
+                            "type": "audio",
                             "filename": filename,
                             "url": f"/api/outputs/{job_id}/{filename}"
                         })
@@ -613,50 +644,159 @@ async def cancel_batch(request):
     })
 
 
+# ==================== Batch Parameters API ====================
+
+@routes.get('/api/batch-parameters/{job_id}')
+async def get_job_parameters(request):
+    """Return the full parameters.json for a batch job (used by re-run)"""
+    job_id = request.match_info['job_id']
+    params_path = os.path.join(OUTPUTS_DIR, job_id, "parameters.json")
+    if not os.path.exists(params_path):
+        return web.Response(text="Parameters not found", status=404)
+    with open(params_path, 'r', encoding='utf-8') as f:
+        params = json.load(f)
+    return web.json_response(params)
+
+
 # ==================== Outputs API ====================
 
 @routes.get('/api/outputs')
 async def list_outputs(request):
-    """List all output jobs"""
+    """List all output jobs with metadata from parameters.json"""
     jobs = []
     for d in sorted(os.listdir(OUTPUTS_DIR), reverse=True):
         job_dir = os.path.join(OUTPUTS_DIR, d)
         if os.path.isdir(job_dir):
-            files = [f for f in os.listdir(job_dir) if f.endswith('.png')]
-            jobs.append({
+            media_files = [f for f in os.listdir(job_dir)
+                           if os.path.splitext(f)[1].lower() in IMAGE_EXTENSIONS | AUDIO_EXTENSIONS]
+            entry = {
                 "job_id": d,
-                "file_count": len(files)
-            })
+                "file_count": len(media_files),
+            }
+            params_path = os.path.join(job_dir, "parameters.json")
+            if os.path.exists(params_path):
+                try:
+                    with open(params_path, 'r', encoding='utf-8') as f:
+                        params = json.load(f)
+                    entry["workflow_name"] = params.get("workflow_name", "")
+                    entry["created_at"] = params.get("created_at", "")
+                    entry["total_jobs"] = params.get("total_jobs", 0)
+                    entry["completed_jobs"] = params.get("completed_jobs", 0)
+                    entry["cancelled"] = params.get("cancelled", False)
+                except Exception:
+                    pass
+            jobs.append(entry)
     return web.json_response(jobs)
 
 @routes.get('/api/outputs/{job_id}')
 async def get_outputs(request):
-    """Get outputs for a specific job"""
+    """Get outputs for a specific job, with per-image parameters"""
     job_id = request.match_info['job_id']
     job_dir = os.path.join(OUTPUTS_DIR, job_id)
     
     if not os.path.exists(job_dir):
         return web.Response(text="Job not found", status=404)
     
+    OUTPUT_EXTENSIONS = IMAGE_EXTENSIONS | AUDIO_EXTENSIONS
+
+    # Build a map from filename -> input parameters using parameters.json
+    file_params = {}
+    params_meta = {}
+    params_path = os.path.join(job_dir, "parameters.json")
+    if os.path.exists(params_path):
+        try:
+            with open(params_path, 'r', encoding='utf-8') as f:
+                params = json.load(f)
+            params_meta = {
+                "workflow_name": params.get("workflow_name", ""),
+                "created_at": params.get("created_at", ""),
+                "server_address": params.get("server_address", ""),
+                "total_jobs": params.get("total_jobs", 0),
+                "completed_jobs": params.get("completed_jobs", 0),
+            }
+            for result in params.get("results", []):
+                inputs = result.get("inputs", {})
+                for out in result.get("outputs", []):
+                    fname = out.get("filename", "")
+                    if fname:
+                        file_params[fname] = inputs
+        except Exception:
+            pass
+
     files = []
     for f in sorted(os.listdir(job_dir)):
-        if f.endswith('.png'):
-            files.append({
+        ext = os.path.splitext(f)[1].lower()
+        if ext in OUTPUT_EXTENSIONS:
+            entry = {
                 "filename": f,
-                "url": f"/api/outputs/{job_id}/{f}"
-            })
+                "url": f"/api/outputs/{job_id}/{f}",
+                "type": "image" if ext in IMAGE_EXTENSIONS else "audio",
+            }
+            if f in file_params:
+                entry["params"] = file_params[f]
+            files.append(entry)
     
-    return web.json_response({"job_id": job_id, "files": files})
+    return web.json_response({"job_id": job_id, "files": files, **params_meta})
+
+@routes.delete('/api/outputs/{job_id}')
+async def delete_job(request):
+    """Delete an entire batch output directory"""
+    import shutil
+    job_id = request.match_info['job_id']
+    job_dir = os.path.join(OUTPUTS_DIR, job_id)
+    if not os.path.exists(job_dir):
+        return web.Response(text="Job not found", status=404)
+    shutil.rmtree(job_dir)
+    return web.json_response({"success": True, "job_id": job_id})
+
+@routes.delete('/api/outputs/{job_id}/{filename}')
+async def delete_output_file(request):
+    """Delete a single output file from a batch"""
+    job_id = request.match_info['job_id']
+    filename = request.match_info['filename']
+    filepath = os.path.join(OUTPUTS_DIR, job_id, filename)
+    if not os.path.exists(filepath):
+        return web.Response(text="File not found", status=404)
+    os.remove(filepath)
+    params_path = os.path.join(OUTPUTS_DIR, job_id, "parameters.json")
+    if os.path.exists(params_path):
+        try:
+            with open(params_path, 'r', encoding='utf-8') as f:
+                params = json.load(f)
+            for result in params.get("results", []):
+                result["outputs"] = [
+                    o for o in result.get("outputs", [])
+                    if o.get("filename") != filename
+                ]
+            with open(params_path, 'w', encoding='utf-8') as f:
+                json.dump(params, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
+    return web.json_response({"success": True, "filename": filename})
 
 @routes.get('/api/outputs/{job_id}/{filename}')
 async def get_output_file(request):
-    """Serve an output image file"""
+    """Serve an output file (image or audio)"""
     job_id = request.match_info['job_id']
     filename = request.match_info['filename']
     filepath = os.path.join(OUTPUTS_DIR, job_id, filename)
     
     if not os.path.exists(filepath):
         return web.Response(text="File not found", status=404)
+    
+    ext = os.path.splitext(filename)[1].lower()
+    audio_content_types = {
+        '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.flac': 'audio/flac',
+        '.ogg': 'audio/ogg', '.aac': 'audio/aac', '.m4a': 'audio/mp4',
+    }
+    if ext in audio_content_types:
+        with open(filepath, 'rb') as f:
+            data = f.read()
+        return web.Response(
+            body=data,
+            content_type=audio_content_types[ext],
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
     
     return web.FileResponse(filepath)
 

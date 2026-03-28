@@ -199,6 +199,7 @@ class ComfyUIClientAsync:
         prompt_id = (await self.queue_prompt(prompt))["prompt_id"]
         output_images = {}
         output_text = {}
+        output_audio = {}
 
         while True:
             message = await self.ws.receive()
@@ -213,18 +214,26 @@ class ComfyUIClientAsync:
 
         history = (await self.get_history(prompt_id))[prompt_id]
         for node_id, node_output in history["outputs"].items():
-            images_output = []
             if "images" in node_output:
+                images_output = []
                 for image in node_output["images"]:
                     image_data = await self.get_image(
                         image["filename"], image["subfolder"], image["type"]
                     )
                     images_output.append(image_data)
                 output_images[node_id] = images_output
+            if "audio" in node_output:
+                audio_output = []
+                for audio in node_output["audio"]:
+                    audio_data = await self.get_image(
+                        audio["filename"], audio["subfolder"], audio["type"]
+                    )
+                    audio_output.append({"filename": audio["filename"], "data": audio_data})
+                output_audio[node_id] = audio_output
             if "text" in node_output:
                 output_text[node_id] = node_output["text"]
 
-        return output_images, output_text
+        return output_images, output_text, output_audio
 
     async def set_data(
         self,
@@ -302,6 +311,60 @@ class ComfyUIClientAsync:
             return await self.upload_image_bytes(byte_data.read(), filename, subfolder)
         except Exception as e:
             raise RuntimeError(f"Error preparing image for upload: {e}")
+
+    async def upload_audio_bytes(self, audio_data: bytes, filename="temp.mp3", subfolder="") -> str:
+        """
+        Upload raw audio bytes to ComfyUI server.
+        Tries /upload/audio first (requires VHS extension); falls back to /upload/image
+        which stores the file in ComfyUI's input/ directory so LoadAudio can find it.
+        Returns the filename that ComfyUI assigned (subfolder/filename or just filename).
+        """
+        ext = filename.lower().split('.')[-1] if '.' in filename else 'mp3'
+        audio_content_types = {
+            'mp3': 'audio/mpeg',
+            'wav': 'audio/wav',
+            'flac': 'audio/flac',
+            'ogg': 'audio/ogg',
+            'aac': 'audio/aac',
+            'm4a': 'audio/mp4',
+        }
+        content_type = audio_content_types.get(ext, 'audio/mpeg')
+
+        print(f"    Uploading audio to ComfyUI: {filename} ({len(audio_data)} bytes, {content_type})")
+
+        # Try /upload/audio first (VHS extension endpoint)
+        try:
+            data = aiohttp.FormData()
+            data.add_field("audio", audio_data, filename=filename, content_type=content_type)
+            if subfolder:
+                data.add_field("subfolder", subfolder)
+            data.add_field("overwrite", "true")
+
+            async with self.session.post(
+                f"http://{self.SERVER_ADDRESS}/upload/audio", data=data
+            ) as response:
+                if response.status == 405:
+                    # /upload/audio not available, fall back to /upload/image
+                    print(f"    /upload/audio not available (405), falling back to /upload/image...")
+                else:
+                    response.raise_for_status()
+                    resp_json = await response.json()
+                    print(f"    ComfyUI audio upload response: {resp_json}")
+                    if "name" not in resp_json:
+                        raise ValueError("Invalid audio upload response: missing 'name' field")
+                    uploaded_name = resp_json.get("name")
+                    uploaded_subfolder = resp_json.get("subfolder", "")
+                    if uploaded_subfolder:
+                        return uploaded_subfolder + "/" + uploaded_name
+                    return uploaded_name
+        except RuntimeError:
+            raise
+        except Exception as e:
+            print(f"    /upload/audio failed ({e}), falling back to /upload/image...")
+
+        # Fallback: use /upload/image — ComfyUI stores the file in input/ directory
+        # regardless of content type, so LoadAudio can find it by filename.
+        return await self.upload_image_bytes(audio_data, filename=filename, subfolder=subfolder)
 
     async def upload_image_bytes(self, image_data: bytes, filename="temp.png", subfolder="") -> str:
         """
@@ -391,7 +454,7 @@ class ComfyUIClientAsync:
                 if node_id is not None:
                     node_ids[node_id] = node_name
 
-        images, text = await self.get_images(self.comfyui_prompt)
+        images, text, audio = await self.get_images(self.comfyui_prompt)
         results = {}
         
         for node_id, node_images in images.items():
@@ -404,7 +467,14 @@ class ComfyUIClientAsync:
             for image_data in node_images:
                 image = Image.open(io.BytesIO(image_data))
                 results[result_key] = image
-                
+
+        for node_id, node_audio_list in audio.items():
+            if filter_by_name and node_id not in node_ids:
+                continue
+            result_key = node_ids.get(node_id, node_id)
+            for audio_item in node_audio_list:
+                results[result_key] = {"_type": "audio", "filename": audio_item["filename"], "data": audio_item["data"]}
+
         for node_id, node_text in text.items():
             if filter_by_name and node_id not in node_ids:
                 continue
@@ -524,19 +594,28 @@ class ComfyUIClient:
         if retry_count >= max_retries:
             raise TimeoutError(f"Timeout waiting for prompt {prompt_id} to complete")
 
+        output_audio = {}
         for node_id, node_output in history[prompt_id]["outputs"].items():
-            images_output = []
             if "images" in node_output:
+                images_output = []
                 for image in node_output["images"]:
                     image_data = self.get_image(
                         image["filename"], image["subfolder"], image["type"]
                     )
                     images_output.append(image_data)
                 output_images[node_id] = images_output
+            if "audio" in node_output:
+                audio_output = []
+                for audio in node_output["audio"]:
+                    audio_data = self.get_image(
+                        audio["filename"], audio["subfolder"], audio["type"]
+                    )
+                    audio_output.append({"filename": audio["filename"], "data": audio_data})
+                output_audio[node_id] = audio_output
             if "text" in node_output:
                 output_text[node_id] = node_output["text"]
 
-        return output_images, output_text
+        return output_images, output_text, output_audio
 
     def set_data(
         self,
@@ -620,13 +699,17 @@ class ComfyUIClient:
                 if node_id is not None:
                     node_ids[node_id] = node_name
 
-        images, text = self.get_images(self.comfyui_prompt)
+        images, text, audio = self.get_images(self.comfyui_prompt)
         results = {}
         for node_id, node_images in images.items():
             if node_id in node_ids:
                 for image_data in node_images:
                     image = Image.open(io.BytesIO(image_data))
                     results[node_ids[node_id]] = image
+        for node_id, node_audio_list in audio.items():
+            if node_id in node_ids:
+                for audio_item in node_audio_list:
+                    results[node_ids[node_id]] = {"_type": "audio", "filename": audio_item["filename"], "data": audio_item["data"]}
         for node_id, node_text in text.items():
             if node_id in node_ids:
                 results[node_ids[node_id]] = node_text

@@ -98,12 +98,16 @@ async def run_workflow(client: ComfyUIClientAsync, workflow: Dict, inputs: Dict[
         
         if is_file_type and isinstance(value, str) and os.path.exists(value) and os.path.isfile(value):
             print(f"Uploading {key}: {value}...")
+            ext = os.path.splitext(value)[1].lower()
             with open(value, 'rb') as f:
                 file_data = f.read()
-                filename = os.path.basename(value)
+            filename = os.path.basename(value)
+            if ext in AUDIO_EXTENSIONS:
+                server_path = await client.upload_audio_bytes(file_data, filename=filename)
+            else:
                 server_path = await client.upload_image_bytes(file_data, filename=filename)
-                processed_inputs[key] = server_path
-                print(f"Uploaded to {server_path}")
+            processed_inputs[key] = server_path
+            print(f"Uploaded to {server_path}")
 
     # Inject variables
     final_workflow = WorkflowManager.inject_variables(workflow, processed_inputs)

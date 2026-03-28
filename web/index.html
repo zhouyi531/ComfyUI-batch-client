@@ -248,10 +248,11 @@
             gap: 10px;
             margin-bottom: 16px;
             padding: 16px;
+            padding-top: 24px;
             background: var(--input-bg);
             border-radius: 12px;
             border: 1px solid var(--card-border);
-            align-items: flex-end;
+            align-items: flex-start;
         }
         .batch-row:hover {
             border-color: var(--accent);
@@ -268,19 +269,23 @@
             border-radius: 10px;
         }
         .batch-field {
-            display: flex;
+            display: inline-flex;
             flex-direction: column;
             gap: 4px;
-            flex: 1 1 200px;
+            flex: 0 0 auto;
             min-width: 150px;
-            max-width: 100%;
         }
         .batch-field label {
             font-size: 0.75rem;
             color: var(--text-secondary);
             font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
         }
-        .batch-field input {
+        .batch-field input[type="number"],
+        .batch-field input[type="text"] {
             background: rgba(0,0,0,0.2);
             border: 1px solid var(--card-border);
             color: var(--text-primary);
@@ -288,14 +293,34 @@
             border-radius: 8px;
             font-size: 0.85rem;
             width: 100%;
+            box-sizing: border-box;
         }
-        .batch-field input:focus { outline: none; border-color: var(--accent); }
+        .batch-field input[type="number"]:focus,
+        .batch-field input[type="text"]:focus { outline: none; border-color: var(--accent); }
+        .batch-field textarea {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid var(--card-border);
+            color: var(--text-primary);
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            resize: both;
+            overflow: auto;
+            min-width: 180px;
+            min-height: 38px;
+            width: 200px;
+            height: 38px;
+            font-family: inherit;
+            line-height: 1.4;
+            box-sizing: border-box;
+        }
+        .batch-field textarea:focus { outline: none; border-color: var(--accent); }
         .row-actions { 
             display: flex; 
             gap: 4px; 
-            flex-shrink: 0;
-            align-self: flex-end;
-            padding-bottom: 2px;
+            flex: 0 0 auto;
+            align-self: flex-start;
+            padding-top: 20px;
         }
         
         /* File input container */
@@ -350,6 +375,328 @@
             cursor: pointer;
         }
         .row-actions button:hover { background: rgba(255,255,255,0.08); }
+
+        /* ==================== Browse Tab ==================== */
+        .browse-batch-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .browse-batch-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 14px 18px;
+            background: var(--input-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .browse-batch-item:hover { border-color: var(--accent); background: rgba(167,139,250,0.06); }
+        .browse-batch-item.active { border-color: var(--accent); background: rgba(167,139,250,0.12); }
+        .browse-batch-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 0;
+        }
+        .browse-batch-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .browse-batch-info {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .browse-batch-badge {
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 6px;
+            background: rgba(167,139,250,0.2);
+            color: var(--accent);
+            white-space: nowrap;
+        }
+
+        .browse-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 16px;
+        }
+        .browse-gallery-item {
+            background: var(--input-bg);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--card-border);
+            transition: all 0.2s;
+        }
+        .browse-gallery-item:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+        .browse-gallery-item .thumb-wrap {
+            position: relative;
+            cursor: pointer;
+            overflow: hidden;
+            aspect-ratio: 1;
+            background: rgba(0,0,0,0.2);
+        }
+        .browse-gallery-item .thumb-wrap img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transition: transform 0.3s;
+        }
+        .browse-gallery-item:hover .thumb-wrap img { transform: scale(1.05); }
+        .browse-gallery-item .thumb-wrap .zoom-hint {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.4);
+            opacity: 0;
+            transition: opacity 0.2s;
+            font-size: 1.8rem;
+            pointer-events: none;
+        }
+        .browse-gallery-item:hover .thumb-wrap .zoom-hint { opacity: 1; }
+        .browse-gallery-item .item-footer {
+            padding: 10px 12px;
+        }
+        .browse-gallery-item .item-filename {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 6px;
+        }
+        .browse-params-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.72rem;
+            color: var(--accent);
+            cursor: pointer;
+            padding: 3px 0;
+            user-select: none;
+            border: none;
+            background: none;
+            font-family: inherit;
+        }
+        .browse-params-toggle:hover { text-decoration: underline; }
+        .browse-params-toggle .arrow { transition: transform 0.2s; display: inline-block; }
+        .browse-params-toggle .arrow.open { transform: rotate(90deg); }
+        .browse-params-content {
+            display: none;
+            margin-top: 6px;
+            padding: 8px 10px;
+            background: rgba(0,0,0,0.25);
+            border-radius: 6px;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            word-break: break-all;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .browse-params-content.open { display: block; }
+        .browse-params-content .param-row {
+            display: flex;
+            gap: 6px;
+        }
+        .browse-params-content .param-key {
+            color: var(--accent);
+            font-weight: 500;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .browse-params-content .param-val {
+            color: var(--text-primary);
+            opacity: 0.85;
+        }
+        .browse-empty {
+            text-align: center;
+            padding: 48px 20px;
+            color: var(--text-secondary);
+        }
+        .browse-empty p { margin-bottom: 8px; }
+
+        .browse-delete-btn {
+            background: none;
+            border: 1px solid transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .browse-delete-btn:hover {
+            color: var(--error);
+            border-color: var(--error);
+            background: rgba(248,113,113,0.1);
+        }
+        .browse-img-delete {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            background: rgba(0,0,0,0.6);
+            border: none;
+            color: rgba(255,255,255,0.7);
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: all 0.2s;
+            z-index: 2;
+        }
+        .browse-gallery-item:hover .browse-img-delete { opacity: 1; }
+        .browse-img-delete:hover { background: var(--error); color: #fff; }
+        .lightbox-delete {
+            position: absolute;
+            top: 20px;
+            right: 80px;
+            font-size: 0.85rem;
+            color: rgba(255,255,255,0.6);
+            cursor: pointer;
+            background: rgba(248,113,113,0.2);
+            border: 1px solid rgba(248,113,113,0.4);
+            padding: 6px 14px;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .lightbox-delete:hover { background: var(--error); color: #fff; border-color: var(--error); }
+
+        .browse-rerun-btn {
+            background: none;
+            border: 1px solid transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .browse-rerun-btn:hover {
+            color: var(--accent);
+            border-color: var(--accent);
+            background: rgba(167,139,250,0.1);
+        }
+        .browse-img-rerun {
+            position: absolute;
+            top: 6px;
+            left: 6px;
+            background: rgba(0,0,0,0.6);
+            border: none;
+            color: rgba(255,255,255,0.7);
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: all 0.2s;
+            z-index: 2;
+        }
+        .browse-gallery-item:hover .browse-img-rerun { opacity: 1; }
+        .browse-img-rerun:hover { background: var(--accent); color: #1e1b4b; }
+        .lightbox-rerun {
+            position: absolute;
+            top: 20px;
+            right: 170px;
+            font-size: 0.85rem;
+            color: rgba(255,255,255,0.6);
+            cursor: pointer;
+            background: rgba(167,139,250,0.2);
+            border: 1px solid rgba(167,139,250,0.4);
+            padding: 6px 14px;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .lightbox-rerun:hover { background: var(--accent); color: #1e1b4b; border-color: var(--accent); }
+
+        /* Lightbox */
+        .lightbox-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: rgba(0,0,0,0.88);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s;
+        }
+        .lightbox-overlay.open { opacity: 1; pointer-events: auto; }
+        .lightbox-overlay img {
+            max-width: 92vw;
+            max-height: 90vh;
+            border-radius: 8px;
+            box-shadow: 0 16px 64px rgba(0,0,0,0.6);
+            object-fit: contain;
+        }
+        .lightbox-close {
+            position: absolute;
+            top: 20px;
+            right: 28px;
+            font-size: 2rem;
+            color: rgba(255,255,255,0.7);
+            cursor: pointer;
+            background: none;
+            border: none;
+            line-height: 1;
+            transition: color 0.2s;
+        }
+        .lightbox-close:hover { color: #fff; }
+        .lightbox-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 2.5rem;
+            color: rgba(255,255,255,0.6);
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 16px;
+            transition: color 0.2s;
+            user-select: none;
+        }
+        .lightbox-nav:hover { color: #fff; }
+        .lightbox-nav.prev { left: 12px; }
+        .lightbox-nav.next { right: 12px; }
+        .lightbox-filename {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.6);
+            font-size: 0.8rem;
+            background: rgba(0,0,0,0.5);
+            padding: 6px 14px;
+            border-radius: 20px;
+        }
     </style>
 </head>
 <body>
@@ -370,6 +717,7 @@
         <div class="tabs">
             <button class="tab active" data-tab="single">📋 Data Template Builder</button>
             <button class="tab" data-tab="batch">🚀 Run Mode</button>
+            <button class="tab" data-tab="browse">🖼️ Browse</button>
         </div>
 
         <!-- ==================== SINGLE RUN TAB ==================== -->
@@ -508,6 +856,32 @@
                 <div id="batchResults" class="results-grid"></div>
             </div>
         </div>
+
+        <!-- ==================== BROWSE TAB ==================== -->
+        <div id="browseTab" class="tab-content">
+            <div class="card">
+                <h2>📂 Batch History</h2>
+                <div id="browseBatchList" class="browse-batch-list">
+                    <div class="browse-empty"><p>Loading...</p></div>
+                </div>
+            </div>
+            <div class="card hidden" id="browseGalleryCard">
+                <h2 id="browseGalleryTitle">📸 Images</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.82rem;" id="browseGalleryMeta"></p>
+                <div id="browseGallery" class="browse-gallery"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lightbox -->
+    <div class="lightbox-overlay" id="lightbox">
+        <button class="lightbox-close" id="lightboxClose">&times;</button>
+        <button class="lightbox-rerun" id="lightboxRerun">🔄 Re-run</button>
+        <button class="lightbox-delete" id="lightboxDelete">🗑️ Delete</button>
+        <button class="lightbox-nav prev" id="lightboxPrev">&#8249;</button>
+        <button class="lightbox-nav next" id="lightboxNext">&#8250;</button>
+        <img id="lightboxImg" src="" alt="">
+        <div class="lightbox-filename" id="lightboxFilename"></div>
     </div>
 
     <script>
@@ -515,15 +889,7 @@
         const show = el => el.classList.remove('hidden');
         const hide = el => el.classList.add('hidden');
 
-        // ==================== Tab Switching ====================
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.onclick = () => {
-                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById(tab.dataset.tab + 'Tab').classList.add('active');
-            };
-        });
+        // Tab switching is handled after Browse section is defined
 
         // ==================== SERVER STATUS ====================
         let statusCheckInterval = null;
@@ -947,14 +1313,21 @@
                         container.appendChild(fileInput);
                         container.appendChild(uploadBtn);
                         fieldDiv.appendChild(container);
-                    } else {
-                        // Regular text/number input
+                    } else if (v.type === 'number') {
                         const input = document.createElement('input');
-                        input.type = v.type === 'number' ? 'number' : 'text';
-                        input.placeholder = v.type === 'number' ? '0' : 'value';
+                        input.type = 'number';
+                        input.placeholder = '0';
                         input.value = row[v.id] || '';
                         input.oninput = () => { batchData[idx][v.id] = input.value; };
                         fieldDiv.appendChild(input);
+                    } else {
+                        // Text field — use textarea so it can be freely resized
+                        const textarea = document.createElement('textarea');
+                        textarea.placeholder = 'value';
+                        textarea.value = row[v.id] || '';
+                        textarea.rows = 1;
+                        textarea.oninput = () => { batchData[idx][v.id] = textarea.value; };
+                        fieldDiv.appendChild(textarea);
                     }
                     
                     rowDiv.appendChild(fieldDiv);
@@ -1153,6 +1526,404 @@
             await fetch(`/api/templates/${name}`, { method: 'DELETE' });
             loadSavedData();
         };
+
+        // ==================== BROWSE MODE ====================
+        let browseCurrentImages = [];
+        let browseLightboxIndex = 0;
+        let browseCurrentJobId = null;
+
+        async function loadBrowseBatches() {
+            const list = $('browseBatchList');
+            try {
+                const res = await fetch('/api/outputs');
+                const batches = await res.json();
+                if (batches.length === 0) {
+                    list.innerHTML = '<div class="browse-empty"><p>No batches yet.</p><p style="font-size:0.8rem;">Run a batch job first, then come back here to browse.</p></div>';
+                    return;
+                }
+                list.innerHTML = '';
+                batches.forEach(b => {
+                    const item = document.createElement('div');
+                    item.className = 'browse-batch-item';
+                    item.dataset.jobId = b.job_id;
+                    const name = b.workflow_name || b.job_id;
+                    const date = b.created_at || '';
+                    const count = b.file_count || 0;
+                    const status = b.cancelled ? 'Cancelled' : `${b.completed_jobs || '?'}/${b.total_jobs || '?'}`;
+                    item.innerHTML = `
+                        <div class="browse-batch-meta">
+                            <div class="browse-batch-name">${name}</div>
+                            <div class="browse-batch-info">
+                                <span>${date}</span>
+                                <span>${count} file${count !== 1 ? 's' : ''}</span>
+                                <span>${status}</span>
+                            </div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <div class="browse-batch-badge">${b.job_id.replace('batch_', '').substring(0, 10)}</div>
+                            <button class="browse-rerun-btn" title="Re-run batch in Run Mode">🔄</button>
+                            <button class="browse-delete-btn" data-job="${b.job_id}" title="Delete batch">🗑️</button>
+                        </div>
+                    `;
+                    item.querySelector('.browse-rerun-btn').onclick = (e) => {
+                        e.stopPropagation();
+                        rerunBatch(b.job_id);
+                    };
+                    item.querySelector('.browse-delete-btn').onclick = (e) => {
+                        e.stopPropagation();
+                        deleteBatch(b.job_id);
+                    };
+                    item.onclick = () => loadBrowseGallery(b.job_id, item);
+                    list.appendChild(item);
+                });
+            } catch (e) {
+                list.innerHTML = `<div class="browse-empty"><p>Error loading batches: ${e.message}</p></div>`;
+            }
+        }
+
+        async function loadBrowseGallery(jobId, clickedItem) {
+            document.querySelectorAll('.browse-batch-item').forEach(el => el.classList.remove('active'));
+            if (clickedItem) clickedItem.classList.add('active');
+            browseCurrentJobId = jobId;
+
+            const galleryCard = $('browseGalleryCard');
+            const gallery = $('browseGallery');
+            gallery.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading...</p></div>';
+            show(galleryCard);
+
+            try {
+                const res = await fetch(`/api/outputs/${jobId}`);
+                const data = await res.json();
+
+                $('browseGalleryTitle').textContent = `📸 ${data.workflow_name || jobId}`;
+                const meta = [];
+                if (data.created_at) meta.push(data.created_at);
+                if (data.server_address) meta.push(`Server: ${data.server_address}`);
+                meta.push(`${data.files.length} file${data.files.length !== 1 ? 's' : ''}`);
+                $('browseGalleryMeta').textContent = meta.join('  ·  ');
+
+                browseCurrentImages = data.files.filter(f => f.type === 'image');
+
+                if (data.files.length === 0) {
+                    gallery.innerHTML = '<div class="browse-empty"><p>No files in this batch.</p></div>';
+                    return;
+                }
+
+                gallery.innerHTML = '';
+                data.files.forEach((file, idx) => {
+                    const item = document.createElement('div');
+                    item.className = 'browse-gallery-item';
+
+                    if (file.type === 'image') {
+                        const imgIdx = browseCurrentImages.indexOf(file);
+                        let paramsHTML = '';
+                        if (file.params && Object.keys(file.params).length > 0) {
+                            const paramRows = Object.entries(file.params).map(([k, v]) => {
+                                const display = typeof v === 'string' && v.length > 80 ? v.substring(0, 80) + '…' : v;
+                                return `<div class="param-row"><span class="param-key">${k}:</span> <span class="param-val" title="${String(v).replace(/"/g, '&quot;')}">${display}</span></div>`;
+                            }).join('');
+                            paramsHTML = `
+                                <button class="browse-params-toggle" onclick="toggleBrowseParams(this, event)">
+                                    <span class="arrow">▸</span> Parameters
+                                </button>
+                                <div class="browse-params-content">${paramRows}</div>
+                            `;
+                        }
+                        item.innerHTML = `
+                            <div class="thumb-wrap" onclick="openLightbox(${imgIdx})">
+                                <img src="${file.url}" alt="${file.filename}" loading="lazy">
+                                <div class="zoom-hint">🔍</div>
+                                <button class="browse-img-rerun" title="Re-run in Run Mode">🔄</button>
+                                <button class="browse-img-delete" title="Delete image">🗑️</button>
+                            </div>
+                            <div class="item-footer">
+                                <div class="item-filename" title="${file.filename}">${file.filename}</div>
+                                ${paramsHTML}
+                            </div>
+                        `;
+                        item.querySelector('.browse-img-rerun').onclick = (e) => {
+                            e.stopPropagation();
+                            rerunImage(jobId, file.filename);
+                        };
+                        item.querySelector('.browse-img-delete').onclick = (e) => {
+                            e.stopPropagation();
+                            deleteImage(jobId, file.filename);
+                        };
+                    } else if (file.type === 'audio') {
+                        item.innerHTML = `
+                            <div style="padding: 20px; text-align: center;">
+                                <div style="font-size: 2rem; margin-bottom: 8px;">🎵</div>
+                                <audio controls src="${file.url}" style="width: 100%;"></audio>
+                            </div>
+                            <div class="item-footer">
+                                <div class="item-filename" title="${file.filename}">${file.filename}</div>
+                            </div>
+                        `;
+                    }
+                    gallery.appendChild(item);
+                });
+
+                galleryCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } catch (e) {
+                gallery.innerHTML = `<div class="browse-empty"><p>Error: ${e.message}</p></div>`;
+            }
+        }
+
+        async function deleteBatch(jobId) {
+            if (!confirm(`Delete entire batch "${jobId}"?\nThis cannot be undone.`)) return;
+            try {
+                const res = await fetch(`/api/outputs/${jobId}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error(await res.text());
+                if (browseCurrentJobId === jobId) {
+                    hide($('browseGalleryCard'));
+                    browseCurrentJobId = null;
+                }
+                loadBrowseBatches();
+            } catch (e) {
+                alert('Delete failed: ' + e.message);
+            }
+        }
+
+        async function deleteImage(jobId, filename) {
+            if (!confirm(`Delete "${filename}"?`)) return;
+            try {
+                const res = await fetch(`/api/outputs/${jobId}/${filename}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error(await res.text());
+                // Re-render gallery for current batch
+                const active = document.querySelector('.browse-batch-item.active');
+                await loadBrowseGallery(jobId, active);
+                loadBrowseBatches();
+            } catch (e) {
+                alert('Delete failed: ' + e.message);
+            }
+        }
+
+        // ==================== Re-run helpers ====================
+
+        function switchToTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            const btn = document.querySelector(`.tab[data-tab="${tabName}"]`);
+            if (btn) btn.classList.add('active');
+            const content = document.getElementById(tabName + 'Tab');
+            if (content) content.classList.add('active');
+        }
+
+        async function populateBatchMode(workflowName, inputRows, serverAddress) {
+            // 1. Load workflow by name
+            const wfRes = await fetch(`/api/workflows/${encodeURIComponent(workflowName)}`);
+            if (!wfRes.ok) throw new Error(`Workflow "${workflowName}" not found. Was it deleted?`);
+            batchWorkflow = await wfRes.json();
+
+            // 2. Scan workflow for all possible variable definitions
+            const scanRes = await fetch('/api/scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(batchWorkflow)
+            });
+            if (!scanRes.ok) throw new Error('Failed to scan workflow');
+            const allScanned = await scanRes.json();
+
+            // 3. Determine which variables appear in the input rows
+            const usedKeys = new Set();
+            inputRows.forEach(row => Object.keys(row).forEach(k => usedKeys.add(k)));
+
+            // Filter scanned variables to those used in inputs, preserving order
+            const matchedVars = allScanned.filter(v => usedKeys.has(v.id));
+
+            // If some input keys weren't found in scan (e.g. workflow changed),
+            // create synthetic variable entries so data isn't lost
+            const matchedIds = new Set(matchedVars.map(v => v.id));
+            usedKeys.forEach(k => {
+                if (!matchedIds.has(k)) {
+                    matchedVars.push({ id: k, alias: k, field: k, type: 'text', value: '' });
+                }
+            });
+
+            batchVariables = matchedVars.map(v => ({
+                id: v.id,
+                alias: v.alias || v.field,
+                field: v.field,
+                type: v.type || 'text',
+                default: v.value || '',
+                node_title: v.node_title || ''
+            }));
+
+            // 4. Set batch data rows
+            batchData = inputRows.map(row => {
+                const r = {};
+                batchVariables.forEach(v => { r[v.id] = row[v.id] !== undefined ? row[v.id] : ''; });
+                return r;
+            });
+
+            // 5. Update server address if available
+            if (serverAddress) {
+                $('serverAddress').value = serverAddress;
+            }
+
+            // 6. Set workflow select dropdown
+            const wfSelect = $('batchWorkflowSelect');
+            for (const opt of wfSelect.options) {
+                if (opt.value === workflowName) { wfSelect.value = workflowName; break; }
+            }
+
+            // 7. Render
+            $('batchVarsInfo').textContent = `Variables: ${batchVariables.map(v => v.alias).join(', ')}`;
+            renderBatchEditor();
+            show($('batchEditorCard'));
+            hide($('batchResultsCard'));
+        }
+
+        async function rerunBatch(jobId) {
+            try {
+                const res = await fetch(`/api/batch-parameters/${jobId}`);
+                if (!res.ok) throw new Error('Parameters not found for this batch');
+                const params = await res.json();
+
+                if (!params.workflow_name) {
+                    alert('No workflow name recorded for this batch.');
+                    return;
+                }
+                if (!params.batch_inputs || params.batch_inputs.length === 0) {
+                    alert('No input data recorded for this batch.');
+                    return;
+                }
+
+                await populateBatchMode(params.workflow_name, params.batch_inputs, params.server_address);
+                switchToTab('batch');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } catch (e) {
+                alert('Re-run failed: ' + e.message);
+            }
+        }
+
+        async function rerunImage(jobId, filename) {
+            try {
+                const res = await fetch(`/api/batch-parameters/${jobId}`);
+                if (!res.ok) throw new Error('Parameters not found for this batch');
+                const params = await res.json();
+
+                if (!params.workflow_name) {
+                    alert('No workflow name recorded for this batch.');
+                    return;
+                }
+
+                // Find the result entry whose outputs contain this filename
+                let imageInputs = null;
+                for (const result of (params.results || [])) {
+                    for (const out of (result.outputs || [])) {
+                        if (out.filename === filename) {
+                            imageInputs = result.inputs;
+                            break;
+                        }
+                    }
+                    if (imageInputs) break;
+                }
+
+                if (!imageInputs) {
+                    alert('Could not find parameters for this image.');
+                    return;
+                }
+
+                await populateBatchMode(params.workflow_name, [imageInputs], params.server_address);
+                switchToTab('batch');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } catch (e) {
+                alert('Re-run failed: ' + e.message);
+            }
+        }
+
+        window.toggleBrowseParams = function(btn, event) {
+            event.stopPropagation();
+            const arrow = btn.querySelector('.arrow');
+            const content = btn.nextElementSibling;
+            const isOpen = content.classList.contains('open');
+            content.classList.toggle('open');
+            arrow.classList.toggle('open');
+        };
+
+        // Lightbox
+        window.openLightbox = function(idx) {
+            if (browseCurrentImages.length === 0) return;
+            browseLightboxIndex = idx;
+            updateLightbox();
+            $('lightbox').classList.add('open');
+            document.body.style.overflow = 'hidden';
+        };
+
+        function closeLightbox() {
+            $('lightbox').classList.remove('open');
+            document.body.style.overflow = '';
+        }
+
+        function updateLightbox() {
+            const file = browseCurrentImages[browseLightboxIndex];
+            if (!file) return;
+            $('lightboxImg').src = file.url;
+            $('lightboxFilename').textContent = `${file.filename}  (${browseLightboxIndex + 1}/${browseCurrentImages.length})`;
+        }
+
+        $('lightboxClose').onclick = closeLightbox;
+        $('lightbox').onclick = function(e) { if (e.target === this) closeLightbox(); };
+        $('lightboxPrev').onclick = function(e) {
+            e.stopPropagation();
+            browseLightboxIndex = (browseLightboxIndex - 1 + browseCurrentImages.length) % browseCurrentImages.length;
+            updateLightbox();
+        };
+        $('lightboxNext').onclick = function(e) {
+            e.stopPropagation();
+            browseLightboxIndex = (browseLightboxIndex + 1) % browseCurrentImages.length;
+            updateLightbox();
+        };
+        $('lightboxRerun').onclick = function(e) {
+            e.stopPropagation();
+            const file = browseCurrentImages[browseLightboxIndex];
+            if (!file || !browseCurrentJobId) return;
+            closeLightbox();
+            rerunImage(browseCurrentJobId, file.filename);
+        };
+
+        $('lightboxDelete').onclick = async function(e) {
+            e.stopPropagation();
+            const file = browseCurrentImages[browseLightboxIndex];
+            if (!file || !browseCurrentJobId) return;
+            if (!confirm(`Delete "${file.filename}"?`)) return;
+            try {
+                const res = await fetch(`/api/outputs/${browseCurrentJobId}/${file.filename}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error(await res.text());
+                browseCurrentImages.splice(browseLightboxIndex, 1);
+                if (browseCurrentImages.length === 0) {
+                    closeLightbox();
+                } else {
+                    browseLightboxIndex = Math.min(browseLightboxIndex, browseCurrentImages.length - 1);
+                    updateLightbox();
+                }
+                const active = document.querySelector('.browse-batch-item.active');
+                await loadBrowseGallery(browseCurrentJobId, active);
+                loadBrowseBatches();
+            } catch (err) {
+                alert('Delete failed: ' + err.message);
+            }
+        };
+
+        document.addEventListener('keydown', e => {
+            if (!$('lightbox').classList.contains('open')) return;
+            if (e.key === 'Escape') closeLightbox();
+            if (e.key === 'ArrowLeft') $('lightboxPrev').click();
+            if (e.key === 'ArrowRight') $('lightboxNext').click();
+            if (e.key === 'Delete') $('lightboxDelete').click();
+        });
+
+        // ==================== Tab Switching ====================
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.onclick = function() {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                this.classList.add('active');
+                document.getElementById(this.dataset.tab + 'Tab').classList.add('active');
+                if (this.dataset.tab === 'browse') loadBrowseBatches();
+            };
+        });
 
         // ==================== Init ====================
         loadSavedData();
