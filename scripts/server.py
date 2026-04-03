@@ -6,7 +6,8 @@ import io
 import asyncio
 import uuid
 import time
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+from urllib.parse import quote, unquote
 
 from aiohttp import web
 
@@ -38,6 +39,41 @@ active_batch_jobs = {}  # job_id -> {"cancelled": bool, "results": [], "server":
 
 IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif'}
 AUDIO_EXTENSIONS = {'.mp3', '.wav', '.flac', '.ogg', '.aac', '.m4a'}
+
+AUDIO_CONTENT_TYPES = {
+    '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.flac': 'audio/flac',
+    '.ogg': 'audio/ogg', '.aac': 'audio/aac', '.m4a': 'audio/mp4',
+}
+
+
+def _resolved_existing_dir(path_str: str) -> Optional[str]:
+    """Return realpath of directory if it exists, else None."""
+    if not path_str or not path_str.strip():
+        return None
+    expanded = os.path.expanduser(path_str.strip())
+    real = os.path.realpath(expanded)
+    if not os.path.isdir(real):
+        return None
+    return real
+
+
+def _is_path_under_root(root: str, filepath: str) -> bool:
+    root_n = os.path.normcase(os.path.realpath(root))
+    path_n = os.path.normcase(os.path.realpath(filepath))
+    if path_n == root_n:
+        return True
+    prefix = root_n.rstrip(os.sep) + os.sep
+    return path_n.startswith(prefix)
+
+
+def _is_dir_under_anchor(anchor: str, dir_path: str) -> bool:
+    """True if dir_path is anchor or a subdirectory of anchor (after realpath)."""
+    a = os.path.normcase(os.path.realpath(anchor))
+    d = os.path.normcase(os.path.realpath(dir_path))
+    if d == a:
+        return True
+    prefix = a.rstrip(os.sep) + os.sep
+    return d.startswith(prefix)
 
 
 # ==================== Static Files ====================
@@ -785,19 +821,123 @@ async def get_output_file(request):
         return web.Response(text="File not found", status=404)
     
     ext = os.path.splitext(filename)[1].lower()
-    audio_content_types = {
-        '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.flac': 'audio/flac',
-        '.ogg': 'audio/ogg', '.aac': 'audio/aac', '.m4a': 'audio/mp4',
-    }
-    if ext in audio_content_types:
+    if ext in AUDIO_CONTENT_TYPES:
         with open(filepath, 'rb') as f:
             data = f.read()
         return web.Response(
             body=data,
-            content_type=audio_content_types[ext],
+            content_type=AUDIO_CONTENT_TYPES[ext],
             headers={"Content-Disposition": f'attachment; filename="{filename}"'}
         )
     
+    return web.FileResponse(filepath)
+
+
+# ==================== Local folder browse (same machine as server) ====================
+
+@routes.get('/api/local-folder/tree')
+async def list_local_tree(request):
+    """List immediate children of dir (folders + files); dir must be anchor or inside anchor."""
+    raw_anchor = unquote(request.query.get('anchor', ''))
+    raw_dir = unquote(request.query.get('dir', ''))
+    anchor = _resolved_existing_dir(raw_anchor)
+    dir_path = _resolved_existing_dir(raw_dir)
+    if anchor is None or dir_path is None:
+        return web.json_response({"error": "not_a_directory"}, status=400)
+    if not _is_dir_under_anchor(anchor, dir_path):
+        return web.json_response({"error": "outside_tree"}, status=400)
+
+    try:
+        names = os.listdir(dir_path)
+    except OSError as e:
+        return web.json_response({"error": str(e)}, status=400)
+
+    def sort_key(name: str):
+        full = os.path.join(dir_path, name)
+        try:
+            is_dir = os.path.isdir(full)
+        except OSError:
+            is_dir = False
+        return (0 if is_dir else 1, name.lower())
+
+    entries: List[Dict[str, Any]] = []
+    for name in sorted(names, key=sort_key):
+        full = os.path.join(dir_path, name)
+        try:
+            if os.path.isdir(full):
+                real_d = os.path.realpath(full)
+                if not _is_dir_under_anchor(anchor, real_d):
+                    continue
+                entries.append({"name": name, "kind": "dir", "path": real_d})
+            elif os.path.isfile(full):
+                entries.append({"name": name, "kind": "file"})
+        except OSError:
+            continue
+
+    return web.json_response({
+        "resolved_anchor": anchor,
+        "resolved_dir": dir_path,
+        "entries": entries,
+    })
+
+
+@routes.get('/api/local-folder')
+async def list_local_folder(request):
+    """List image/audio files in a directory on the server host (for Browse tab)."""
+    raw = request.query.get('path', '')
+    root = _resolved_existing_dir(unquote(raw))
+    if root is None:
+        return web.json_response({"error": "not_a_directory"}, status=400)
+
+    OUTPUT_EXT = IMAGE_EXTENSIONS | AUDIO_EXTENSIONS
+    files = []
+    try:
+        for f in sorted(os.listdir(root)):
+            full = os.path.join(root, f)
+            if not os.path.isfile(full):
+                continue
+            ext = os.path.splitext(f)[1].lower()
+            if ext not in OUTPUT_EXT:
+                continue
+            qroot = quote(root, safe='')
+            qname = quote(f, safe='')
+            entry = {
+                "filename": f,
+                "url": f"/api/local-folder/file?path={qroot}&name={qname}",
+                "type": "image" if ext in IMAGE_EXTENSIONS else "audio",
+            }
+            files.append(entry)
+    except OSError as e:
+        return web.json_response({"error": str(e)}, status=400)
+
+    return web.json_response({
+        "files": files,
+        "resolved_path": root,
+        "local": True,
+    })
+
+
+@routes.get('/api/local-folder/file')
+async def get_local_folder_file(request):
+    """Serve one file from a directory previously opened via /api/local-folder."""
+    raw_root = unquote(request.query.get('path', ''))
+    name = unquote(request.query.get('name', ''))
+    root = _resolved_existing_dir(raw_root)
+    if root is None or not name or os.path.basename(name) != name:
+        return web.Response(text="Bad request", status=400)
+    filepath = os.path.join(root, name)
+    if not _is_path_under_root(root, filepath) or not os.path.isfile(filepath):
+        return web.Response(text="Not found", status=404)
+
+    ext = os.path.splitext(name)[1].lower()
+    if ext in AUDIO_CONTENT_TYPES:
+        with open(filepath, 'rb') as f:
+            data = f.read()
+        return web.Response(
+            body=data,
+            content_type=AUDIO_CONTENT_TYPES[ext],
+            headers={"Content-Disposition": f'attachment; filename="{name}"'}
+        )
     return web.FileResponse(filepath)
 
 

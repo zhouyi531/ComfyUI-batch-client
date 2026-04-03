@@ -377,6 +377,102 @@
         .row-actions button:hover { background: rgba(255,255,255,0.08); }
 
         /* ==================== Browse Tab ==================== */
+        .browse-local-row {
+            display: flex;
+            gap: 10px;
+            align-items: stretch;
+            flex-wrap: wrap;
+        }
+        .browse-local-row input[type="text"] {
+            flex: 1;
+            min-width: 220px;
+            background: var(--input-bg);
+            border: 1px solid var(--card-border);
+            color: var(--text-primary);
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 0.88rem;
+        }
+        .browse-local-row .btn { flex-shrink: 0; }
+
+        .browse-local-tree-wrap {
+            margin-top: 18px;
+            padding-top: 16px;
+            border-top: 1px solid var(--card-border);
+        }
+        .browse-local-tree-wrap .browse-tree-hint {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+        }
+        .browse-tree-root-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            max-height: min(420px, 55vh);
+            overflow: auto;
+            background: rgba(0,0,0,0.15);
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            padding: 8px 6px;
+        }
+        .browse-tree-children {
+            list-style: none;
+            padding: 0 0 0 14px;
+            margin: 2px 0 0 0;
+            border-left: 1px solid rgba(255,255,255,0.08);
+        }
+        .browse-tree-item { margin: 0; padding: 0; }
+        .browse-tree-row {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            padding: 5px 8px;
+            border-radius: 6px;
+            font-size: 0.86rem;
+        }
+        .browse-tree-row--folder:hover { background: rgba(255,255,255,0.06); }
+        .browse-tree-row--folder.selected {
+            background: rgba(167,139,250,0.14);
+            outline: 1px solid rgba(167,139,250,0.35);
+        }
+        .browse-tree-exp {
+            flex-shrink: 0;
+            width: 22px;
+            height: 22px;
+            padding: 0;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.65rem;
+            line-height: 1;
+            border-radius: 4px;
+        }
+        .browse-tree-exp:hover { color: var(--text-primary); background: rgba(255,255,255,0.08); }
+        .browse-tree-label {
+            cursor: pointer;
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            user-select: none;
+        }
+        .browse-tree-item--file {
+            padding: 3px 8px 3px 28px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .browse-tree-loading {
+            padding: 6px 28px;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+        }
+
         .browse-batch-list {
             display: flex;
             flex-direction: column;
@@ -859,6 +955,20 @@
 
         <!-- ==================== BROWSE TAB ==================== -->
         <div id="browseTab" class="tab-content">
+            <div class="card">
+                <h2>📁 Open local folder</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 12px; font-size: 0.82rem;">
+                    Path on the machine where this web app runs (e.g. <code style="opacity:0.9;">~/Pictures/out</code> or an absolute path). Use the tree to open subfolders; click a folder to show images from that folder.
+                </p>
+                <div class="browse-local-row">
+                    <input type="text" id="browseLocalPathInput" placeholder="/path/to/folder" autocomplete="off" spellcheck="false">
+                    <button type="button" class="btn btn-primary" id="browseLocalLoadBtn">Load folder</button>
+                </div>
+                <div id="browseLocalTreeWrap" class="browse-local-tree-wrap hidden">
+                    <p class="browse-tree-hint">▶ / ▼ expand or collapse. Click a folder name to load the gallery for that folder (only inside the path you opened).</p>
+                    <div id="browseLocalTree"></div>
+                </div>
+            </div>
             <div class="card">
                 <h2>📂 Batch History</h2>
                 <div id="browseBatchList" class="browse-batch-list">
@@ -1531,6 +1641,239 @@
         let browseCurrentImages = [];
         let browseLightboxIndex = 0;
         let browseCurrentJobId = null;
+        let browseTreeAnchor = null;
+
+        function browseTreeBasename(p) {
+            const parts = String(p).split(/[/\\]/).filter(Boolean);
+            return parts.length ? parts[parts.length - 1] : p;
+        }
+
+        function browseEscapeHtml(s) {
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
+
+        function browseTreeSelectRow(row) {
+            document.querySelectorAll('.browse-tree-row--folder.selected').forEach(r => r.classList.remove('selected'));
+            row.classList.add('selected');
+        }
+
+        async function fillBrowseTreeChildren(ul, dirPath) {
+            ul.innerHTML = '<li class="browse-tree-loading">Loading…</li>';
+            const res = await fetch(
+                '/api/local-folder/tree?anchor=' + encodeURIComponent(browseTreeAnchor)
+                + '&dir=' + encodeURIComponent(dirPath)
+            );
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                ul.innerHTML = '<li class="browse-tree-loading">' + browseEscapeHtml(data.error || res.statusText || 'Failed') + '</li>';
+                return;
+            }
+            ul.innerHTML = '';
+            for (const ent of data.entries) {
+                if (ent.kind === 'dir') {
+                    ul.appendChild(createBrowseFolderTreeItem(ent.name, ent.path));
+                } else {
+                    const li = document.createElement('li');
+                    li.className = 'browse-tree-item browse-tree-item--file';
+                    li.innerHTML = '<span class="browse-tree-file">📄 ' + browseEscapeHtml(ent.name) + '</span>';
+                    ul.appendChild(li);
+                }
+            }
+        }
+
+        function createBrowseFolderTreeItem(name, resolvedPath) {
+            const li = document.createElement('li');
+            li.className = 'browse-tree-item';
+            const row = document.createElement('div');
+            row.className = 'browse-tree-row browse-tree-row--folder';
+            row.dataset.path = resolvedPath;
+            const exp = document.createElement('button');
+            exp.type = 'button';
+            exp.className = 'browse-tree-exp';
+            exp.setAttribute('aria-expanded', 'false');
+            exp.setAttribute('aria-label', 'Expand');
+            exp.textContent = '▶';
+            const label = document.createElement('span');
+            label.className = 'browse-tree-label';
+            label.textContent = name;
+            label.title = resolvedPath;
+            row.appendChild(exp);
+            row.appendChild(label);
+            const childUl = document.createElement('ul');
+            childUl.className = 'browse-tree-children hidden';
+
+            exp.addEventListener('click', async e => {
+                e.stopPropagation();
+                const open = row.classList.toggle('browse-tree-open');
+                exp.textContent = open ? '▼' : '▶';
+                exp.setAttribute('aria-expanded', open ? 'true' : 'false');
+                if (open) {
+                    if (!childUl.dataset.loaded) {
+                        await fillBrowseTreeChildren(childUl, resolvedPath);
+                        childUl.dataset.loaded = '1';
+                    }
+                    childUl.classList.remove('hidden');
+                } else {
+                    childUl.classList.add('hidden');
+                }
+            });
+
+            label.addEventListener('click', async () => {
+                browseTreeSelectRow(row);
+                await loadLocalGalleryForPath(resolvedPath);
+            });
+
+            li.appendChild(row);
+            li.appendChild(childUl);
+            return li;
+        }
+
+        async function mountBrowseLocalTree(anchor) {
+            const container = $('browseLocalTree');
+            container.innerHTML = '';
+            const rootUl = document.createElement('ul');
+            rootUl.className = 'browse-tree-root-list';
+            const displayName = browseTreeBasename(anchor);
+            const rootLi = createBrowseFolderTreeItem(displayName, anchor);
+            rootUl.appendChild(rootLi);
+            container.appendChild(rootUl);
+
+            const row = rootLi.querySelector('.browse-tree-row');
+            const exp = rootLi.querySelector('.browse-tree-exp');
+            const childUl = rootLi.querySelector('.browse-tree-children');
+            row.classList.add('browse-tree-open', 'selected');
+            exp.textContent = '▼';
+            exp.setAttribute('aria-expanded', 'true');
+            try {
+                await fillBrowseTreeChildren(childUl, anchor);
+                childUl.dataset.loaded = '1';
+                childUl.classList.remove('hidden');
+            } catch (e) {
+                childUl.innerHTML = '<li class="browse-tree-loading">' + browseEscapeHtml(e.message) + '</li>';
+            }
+        }
+
+        async function loadLocalGalleryForPath(resolvedPath) {
+            document.querySelectorAll('.browse-batch-item').forEach(el => el.classList.remove('active'));
+            browseCurrentJobId = null;
+            const galleryCard = $('browseGalleryCard');
+            const gallery = $('browseGallery');
+            gallery.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading...</p></div>';
+            show(galleryCard);
+            try {
+                const res = await fetch('/api/local-folder?path=' + encodeURIComponent(resolvedPath));
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    const msg = data.error === 'not_a_directory'
+                        ? 'Not a directory or path does not exist on the server.'
+                        : (data.error || res.statusText || 'Request failed');
+                    throw new Error(msg);
+                }
+                renderBrowseGallery(data, null);
+            } catch (e) {
+                browseCurrentImages = [];
+                gallery.innerHTML = `<div class="browse-empty"><p>Error: ${e.message}</p></div>`;
+            }
+        }
+
+        function syncLightboxBatchActions() {
+            const show = browseCurrentJobId != null;
+            $('lightboxRerun').style.display = show ? '' : 'none';
+            $('lightboxDelete').style.display = show ? '' : 'none';
+        }
+
+        function renderBrowseGallery(data, jobId) {
+            const galleryCard = $('browseGalleryCard');
+            const gallery = $('browseGallery');
+            const isLocal = jobId == null;
+
+            if (isLocal) {
+                $('browseGalleryTitle').textContent = '📂 Local folder';
+                const pathLabel = data.resolved_path || '';
+                const meta = [pathLabel];
+                meta.push(`${data.files.length} file${data.files.length !== 1 ? 's' : ''}`);
+                $('browseGalleryMeta').textContent = meta.join('  ·  ');
+            } else {
+                $('browseGalleryTitle').textContent = `📸 ${data.workflow_name || jobId}`;
+                const meta = [];
+                if (data.created_at) meta.push(data.created_at);
+                if (data.server_address) meta.push(`Server: ${data.server_address}`);
+                meta.push(`${data.files.length} file${data.files.length !== 1 ? 's' : ''}`);
+                $('browseGalleryMeta').textContent = meta.join('  ·  ');
+            }
+
+            browseCurrentImages = data.files.filter(f => f.type === 'image');
+
+            if (data.files.length === 0) {
+                gallery.innerHTML = isLocal
+                    ? '<div class="browse-empty"><p>No image or audio files in this folder.</p></div>'
+                    : '<div class="browse-empty"><p>No files in this batch.</p></div>';
+                return;
+            }
+
+            gallery.innerHTML = '';
+            data.files.forEach((file, idx) => {
+                const item = document.createElement('div');
+                item.className = 'browse-gallery-item';
+
+                if (file.type === 'image') {
+                    const imgIdx = browseCurrentImages.indexOf(file);
+                    let paramsHTML = '';
+                    if (!isLocal && file.params && Object.keys(file.params).length > 0) {
+                        const paramRows = Object.entries(file.params).map(([k, v]) => {
+                            const display = typeof v === 'string' && v.length > 80 ? v.substring(0, 80) + '…' : v;
+                            return `<div class="param-row"><span class="param-key">${k}:</span> <span class="param-val" title="${String(v).replace(/"/g, '&quot;')}">${display}</span></div>`;
+                        }).join('');
+                        paramsHTML = `
+                                <button class="browse-params-toggle" onclick="toggleBrowseParams(this, event)">
+                                    <span class="arrow">▸</span> Parameters
+                                </button>
+                                <div class="browse-params-content">${paramRows}</div>
+                            `;
+                    }
+                    const batchBtns = isLocal ? '' : `
+                                <button class="browse-img-rerun" title="Re-run in Run Mode">🔄</button>
+                                <button class="browse-img-delete" title="Delete image">🗑️</button>
+                            `;
+                    item.innerHTML = `
+                            <div class="thumb-wrap" onclick="openLightbox(${imgIdx})">
+                                <img src="${file.url}" alt="${file.filename}" loading="lazy">
+                                <div class="zoom-hint">🔍</div>
+                                ${batchBtns}
+                            </div>
+                            <div class="item-footer">
+                                <div class="item-filename" title="${file.filename}">${file.filename}</div>
+                                ${paramsHTML}
+                            </div>
+                        `;
+                    if (!isLocal) {
+                        item.querySelector('.browse-img-rerun').onclick = (e) => {
+                            e.stopPropagation();
+                            rerunImage(jobId, file.filename);
+                        };
+                        item.querySelector('.browse-img-delete').onclick = (e) => {
+                            e.stopPropagation();
+                            deleteImage(jobId, file.filename);
+                        };
+                    }
+                } else if (file.type === 'audio') {
+                    item.innerHTML = `
+                            <div style="padding: 20px; text-align: center;">
+                                <div style="font-size: 2rem; margin-bottom: 8px;">🎵</div>
+                                <audio controls src="${file.url}" style="width: 100%;"></audio>
+                            </div>
+                            <div class="item-footer">
+                                <div class="item-filename" title="${file.filename}">${file.filename}</div>
+                            </div>
+                        `;
+                }
+                gallery.appendChild(item);
+            });
+
+            galleryCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
 
         async function loadBrowseBatches() {
             const list = $('browseBatchList');
@@ -1594,80 +1937,59 @@
             try {
                 const res = await fetch(`/api/outputs/${jobId}`);
                 const data = await res.json();
-
-                $('browseGalleryTitle').textContent = `📸 ${data.workflow_name || jobId}`;
-                const meta = [];
-                if (data.created_at) meta.push(data.created_at);
-                if (data.server_address) meta.push(`Server: ${data.server_address}`);
-                meta.push(`${data.files.length} file${data.files.length !== 1 ? 's' : ''}`);
-                $('browseGalleryMeta').textContent = meta.join('  ·  ');
-
-                browseCurrentImages = data.files.filter(f => f.type === 'image');
-
-                if (data.files.length === 0) {
-                    gallery.innerHTML = '<div class="browse-empty"><p>No files in this batch.</p></div>';
-                    return;
-                }
-
-                gallery.innerHTML = '';
-                data.files.forEach((file, idx) => {
-                    const item = document.createElement('div');
-                    item.className = 'browse-gallery-item';
-
-                    if (file.type === 'image') {
-                        const imgIdx = browseCurrentImages.indexOf(file);
-                        let paramsHTML = '';
-                        if (file.params && Object.keys(file.params).length > 0) {
-                            const paramRows = Object.entries(file.params).map(([k, v]) => {
-                                const display = typeof v === 'string' && v.length > 80 ? v.substring(0, 80) + '…' : v;
-                                return `<div class="param-row"><span class="param-key">${k}:</span> <span class="param-val" title="${String(v).replace(/"/g, '&quot;')}">${display}</span></div>`;
-                            }).join('');
-                            paramsHTML = `
-                                <button class="browse-params-toggle" onclick="toggleBrowseParams(this, event)">
-                                    <span class="arrow">▸</span> Parameters
-                                </button>
-                                <div class="browse-params-content">${paramRows}</div>
-                            `;
-                        }
-                        item.innerHTML = `
-                            <div class="thumb-wrap" onclick="openLightbox(${imgIdx})">
-                                <img src="${file.url}" alt="${file.filename}" loading="lazy">
-                                <div class="zoom-hint">🔍</div>
-                                <button class="browse-img-rerun" title="Re-run in Run Mode">🔄</button>
-                                <button class="browse-img-delete" title="Delete image">🗑️</button>
-                            </div>
-                            <div class="item-footer">
-                                <div class="item-filename" title="${file.filename}">${file.filename}</div>
-                                ${paramsHTML}
-                            </div>
-                        `;
-                        item.querySelector('.browse-img-rerun').onclick = (e) => {
-                            e.stopPropagation();
-                            rerunImage(jobId, file.filename);
-                        };
-                        item.querySelector('.browse-img-delete').onclick = (e) => {
-                            e.stopPropagation();
-                            deleteImage(jobId, file.filename);
-                        };
-                    } else if (file.type === 'audio') {
-                        item.innerHTML = `
-                            <div style="padding: 20px; text-align: center;">
-                                <div style="font-size: 2rem; margin-bottom: 8px;">🎵</div>
-                                <audio controls src="${file.url}" style="width: 100%;"></audio>
-                            </div>
-                            <div class="item-footer">
-                                <div class="item-filename" title="${file.filename}">${file.filename}</div>
-                            </div>
-                        `;
-                    }
-                    gallery.appendChild(item);
-                });
-
-                galleryCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                renderBrowseGallery(data, jobId);
             } catch (e) {
+                browseCurrentImages = [];
                 gallery.innerHTML = `<div class="browse-empty"><p>Error: ${e.message}</p></div>`;
             }
         }
+
+        async function loadLocalBrowseFolder() {
+            const p = $('browseLocalPathInput').value.trim();
+            if (!p) {
+                alert('Enter a folder path');
+                return;
+            }
+            document.querySelectorAll('.browse-batch-item').forEach(el => el.classList.remove('active'));
+            browseCurrentJobId = null;
+            browseTreeAnchor = null;
+
+            const galleryCard = $('browseGalleryCard');
+            const gallery = $('browseGallery');
+            const treeWrap = $('browseLocalTreeWrap');
+            gallery.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading...</p></div>';
+            show(galleryCard);
+            hide(treeWrap);
+
+            try {
+                const tres = await fetch(
+                    '/api/local-folder/tree?anchor=' + encodeURIComponent(p) + '&dir=' + encodeURIComponent(p)
+                );
+                const tdata = await tres.json().catch(() => ({}));
+                if (!tres.ok) {
+                    const code = tdata.error;
+                    const msg = code === 'not_a_directory'
+                        ? 'Not a directory or path does not exist on the server.'
+                        : code === 'outside_tree'
+                            ? 'Path is outside the opened tree.'
+                            : (tdata.error || tres.statusText || 'Request failed');
+                    throw new Error(msg);
+                }
+                browseTreeAnchor = tdata.resolved_anchor;
+                show(treeWrap);
+                await mountBrowseLocalTree(browseTreeAnchor);
+                await loadLocalGalleryForPath(browseTreeAnchor);
+            } catch (e) {
+                browseCurrentImages = [];
+                hide(treeWrap);
+                gallery.innerHTML = `<div class="browse-empty"><p>Error: ${e.message}</p></div>`;
+            }
+        }
+
+        $('browseLocalLoadBtn').onclick = () => loadLocalBrowseFolder();
+        $('browseLocalPathInput').onkeydown = e => {
+            if (e.key === 'Enter') loadLocalBrowseFolder();
+        };
 
         async function deleteBatch(jobId) {
             if (!confirm(`Delete entire batch "${jobId}"?\nThis cannot be undone.`)) return;
@@ -1847,6 +2169,7 @@
             if (browseCurrentImages.length === 0) return;
             browseLightboxIndex = idx;
             updateLightbox();
+            syncLightboxBatchActions();
             $('lightbox').classList.add('open');
             document.body.style.overflow = 'hidden';
         };
@@ -1911,7 +2234,7 @@
             if (e.key === 'Escape') closeLightbox();
             if (e.key === 'ArrowLeft') $('lightboxPrev').click();
             if (e.key === 'ArrowRight') $('lightboxNext').click();
-            if (e.key === 'Delete') $('lightboxDelete').click();
+            if (e.key === 'Delete' && browseCurrentJobId) $('lightboxDelete').click();
         });
 
         // ==================== Tab Switching ====================
