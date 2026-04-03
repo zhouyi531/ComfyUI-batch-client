@@ -1642,6 +1642,12 @@
         let browseLightboxIndex = 0;
         let browseCurrentJobId = null;
         let browseTreeAnchor = null;
+        let browseGalleryAllFiles = [];
+        let browseGalleryNextIndex = 0;
+        let browseGalleryChunkSize = 60;
+        let browseGallerySentinel = null;
+        let browseGalleryObserver = null;
+        let browseImageIndexMap = new Map();
 
         function browseTreeBasename(p) {
             const parts = String(p).split(/[/\\]/).filter(Boolean);
@@ -1784,42 +1790,57 @@
             $('lightboxDelete').style.display = show ? '' : 'none';
         }
 
-        function renderBrowseGallery(data, jobId) {
-            const galleryCard = $('browseGalleryCard');
-            const gallery = $('browseGallery');
-            const isLocal = jobId == null;
+        function ensureBrowseGalleryObserver() {
+            if (browseGalleryObserver) return;
+            if (!('IntersectionObserver' in window)) return;
+            browseGalleryObserver = new IntersectionObserver(entries => {
+                for (const entry of entries) {
+                    if (entry.isIntersecting) {
+                        renderNextBrowseGalleryChunk();
+                        break;
+                    }
+                }
+            }, { root: null, rootMargin: '600px 0px', threshold: 0.01 });
+        }
 
-            if (isLocal) {
-                $('browseGalleryTitle').textContent = '📂 Local folder';
-                const pathLabel = data.resolved_path || '';
-                const meta = [pathLabel];
-                meta.push(`${data.files.length} file${data.files.length !== 1 ? 's' : ''}`);
-                $('browseGalleryMeta').textContent = meta.join('  ·  ');
-            } else {
-                $('browseGalleryTitle').textContent = `📸 ${data.workflow_name || jobId}`;
-                const meta = [];
-                if (data.created_at) meta.push(data.created_at);
-                if (data.server_address) meta.push(`Server: ${data.server_address}`);
-                meta.push(`${data.files.length} file${data.files.length !== 1 ? 's' : ''}`);
-                $('browseGalleryMeta').textContent = meta.join('  ·  ');
+        function resetBrowseGalleryLazyState() {
+            browseGalleryAllFiles = [];
+            browseGalleryNextIndex = 0;
+            browseImageIndexMap = new Map();
+            if (browseGalleryObserver && browseGallerySentinel) {
+                try { browseGalleryObserver.unobserve(browseGallerySentinel); } catch {}
             }
+            browseGallerySentinel = null;
+        }
 
-            browseCurrentImages = data.files.filter(f => f.type === 'image');
-
-            if (data.files.length === 0) {
-                gallery.innerHTML = isLocal
-                    ? '<div class="browse-empty"><p>No image or audio files in this folder.</p></div>'
-                    : '<div class="browse-empty"><p>No files in this batch.</p></div>';
+        function renderNextBrowseGalleryChunk() {
+            const gallery = $('browseGallery');
+            if (!browseGalleryAllFiles || browseGalleryAllFiles.length === 0) return;
+            if (browseGalleryNextIndex >= browseGalleryAllFiles.length) {
+                if (browseGalleryObserver && browseGallerySentinel) {
+                    try { browseGalleryObserver.unobserve(browseGallerySentinel); } catch {}
+                }
                 return;
             }
 
-            gallery.innerHTML = '';
-            data.files.forEach((file, idx) => {
+            // Remove sentinel temporarily so it always stays at the end.
+            if (browseGallerySentinel && browseGallerySentinel.parentElement === gallery) {
+                gallery.removeChild(browseGallerySentinel);
+            }
+
+            const isLocal = browseCurrentJobId == null;
+            const jobId = browseCurrentJobId;
+
+            const end = Math.min(browseGalleryNextIndex + browseGalleryChunkSize, browseGalleryAllFiles.length);
+            const slice = browseGalleryAllFiles.slice(browseGalleryNextIndex, end);
+            browseGalleryNextIndex = end;
+
+            for (const file of slice) {
                 const item = document.createElement('div');
                 item.className = 'browse-gallery-item';
 
                 if (file.type === 'image') {
-                    const imgIdx = browseCurrentImages.indexOf(file);
+                    const imgIdx = browseImageIndexMap.get(file);
                     let paramsHTML = '';
                     if (!isLocal && file.params && Object.keys(file.params).length > 0) {
                         const paramRows = Object.entries(file.params).map(([k, v]) => {
@@ -1870,7 +1891,57 @@
                         `;
                 }
                 gallery.appendChild(item);
-            });
+            }
+
+            if (!browseGallerySentinel) {
+                browseGallerySentinel = document.createElement('div');
+                browseGallerySentinel.style.height = '1px';
+                browseGallerySentinel.style.width = '100%';
+            }
+            gallery.appendChild(browseGallerySentinel);
+
+            ensureBrowseGalleryObserver();
+            if (browseGalleryObserver) {
+                try { browseGalleryObserver.observe(browseGallerySentinel); } catch {}
+            }
+        }
+
+        function renderBrowseGallery(data, jobId) {
+            const galleryCard = $('browseGalleryCard');
+            const gallery = $('browseGallery');
+            const isLocal = jobId == null;
+
+            if (isLocal) {
+                $('browseGalleryTitle').textContent = '📂 Local folder';
+                const pathLabel = data.resolved_path || '';
+                const meta = [pathLabel];
+                meta.push(`${data.files.length} file${data.files.length !== 1 ? 's' : ''}`);
+                $('browseGalleryMeta').textContent = meta.join('  ·  ');
+            } else {
+                $('browseGalleryTitle').textContent = `📸 ${data.workflow_name || jobId}`;
+                const meta = [];
+                if (data.created_at) meta.push(data.created_at);
+                if (data.server_address) meta.push(`Server: ${data.server_address}`);
+                meta.push(`${data.files.length} file${data.files.length !== 1 ? 's' : ''}`);
+                $('browseGalleryMeta').textContent = meta.join('  ·  ');
+            }
+
+            resetBrowseGalleryLazyState();
+            browseGalleryAllFiles = Array.isArray(data.files) ? data.files : [];
+            browseCurrentImages = browseGalleryAllFiles.filter(f => f.type === 'image');
+            browseImageIndexMap = new Map();
+            browseCurrentImages.forEach((f, i) => browseImageIndexMap.set(f, i));
+
+            if (browseGalleryAllFiles.length === 0) {
+                gallery.innerHTML = isLocal
+                    ? '<div class="browse-empty"><p>No image or audio files in this folder.</p></div>'
+                    : '<div class="browse-empty"><p>No files in this batch.</p></div>';
+                return;
+            }
+
+            gallery.innerHTML = '';
+            browseGalleryNextIndex = 0;
+            renderNextBrowseGalleryChunk();
 
             galleryCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
