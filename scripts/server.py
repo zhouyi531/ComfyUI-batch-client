@@ -39,11 +39,18 @@ active_batch_jobs = {}  # job_id -> {"cancelled": bool, "results": [], "server":
 
 IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif'}
 AUDIO_EXTENSIONS = {'.mp3', '.wav', '.flac', '.ogg', '.aac', '.m4a'}
+VIDEO_EXTENSIONS = {'.mp4', '.webm', '.mov', '.avi', '.mkv'}
 
 AUDIO_CONTENT_TYPES = {
     '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.flac': 'audio/flac',
     '.ogg': 'audio/ogg', '.aac': 'audio/aac', '.m4a': 'audio/mp4',
 }
+VIDEO_CONTENT_TYPES = {
+    '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime',
+    '.avi': 'video/x-msvideo', '.mkv': 'video/x-matroska',
+}
+
+MEDIA_EXTENSIONS = IMAGE_EXTENSIONS | AUDIO_EXTENSIONS | VIDEO_EXTENSIONS
 
 
 def _resolved_existing_dir(path_str: str) -> Optional[str]:
@@ -445,14 +452,13 @@ async def batch_run(request):
             # Find folder paths
             for key, value in inputs.items():
                 if isinstance(value, str) and os.path.isdir(value):
-                    # List image files in folder
                     files = []
                     for f in sorted(os.listdir(value)):
-                        if os.path.splitext(f)[1].lower() in IMAGE_EXTENSIONS:
+                        if os.path.splitext(f)[1].lower() in MEDIA_EXTENSIONS:
                             files.append(os.path.join(value, f))
                     if files:
                         folder_vars[key] = files
-                        print(f"Expanding folder '{value}' -> {len(files)} images")
+                        print(f"Expanding folder '{value}' -> {len(files)} media files")
             
             if not folder_vars:
                 # No folders, keep as is
@@ -532,7 +538,16 @@ async def batch_run(request):
                                 file_data = f.read()
                             print(f"    Read {len(file_data)} bytes from file")
                             uploaded_path = await client.upload_audio_bytes(file_data, filename=safe_name)
-                            # ComfyUI LoadAudio expects just the filename
+                            if '/' in uploaded_path:
+                                uploaded_path = uploaded_path.split('/')[-1]
+                            processed_inputs[key] = uploaded_path
+                            print(f"    -> Uploaded as: {uploaded_path}")
+                        elif ext in VIDEO_EXTENSIONS:
+                            print(f"  Uploading video {original_name} ({file_size} bytes)...")
+                            with open(value, 'rb') as f:
+                                file_data = f.read()
+                            print(f"    Read {len(file_data)} bytes from file")
+                            uploaded_path = await client.upload_image_bytes(file_data, filename=safe_name)
                             if '/' in uploaded_path:
                                 uploaded_path = uploaded_path.split('/')[-1]
                             processed_inputs[key] = uploaded_path
@@ -883,13 +898,12 @@ async def list_local_tree(request):
 
 @routes.get('/api/local-folder')
 async def list_local_folder(request):
-    """List image/audio files in a directory on the server host (for Browse tab)."""
+    """List image/audio/video files in a directory on the server host."""
     raw = request.query.get('path', '')
     root = _resolved_existing_dir(unquote(raw))
     if root is None:
         return web.json_response({"error": "not_a_directory"}, status=400)
 
-    OUTPUT_EXT = IMAGE_EXTENSIONS | AUDIO_EXTENSIONS
     files = []
     try:
         for f in sorted(os.listdir(root)):
@@ -897,14 +911,21 @@ async def list_local_folder(request):
             if not os.path.isfile(full):
                 continue
             ext = os.path.splitext(f)[1].lower()
-            if ext not in OUTPUT_EXT:
+            if ext not in MEDIA_EXTENSIONS:
                 continue
             qroot = quote(root, safe='')
             qname = quote(f, safe='')
+            if ext in IMAGE_EXTENSIONS:
+                ftype = "image"
+            elif ext in AUDIO_EXTENSIONS:
+                ftype = "audio"
+            else:
+                ftype = "video"
             entry = {
                 "filename": f,
                 "url": f"/api/local-folder/file?path={qroot}&name={qname}",
-                "type": "image" if ext in IMAGE_EXTENSIONS else "audio",
+                "type": ftype,
+                "path": full,
             }
             files.append(entry)
     except OSError as e:
@@ -930,13 +951,14 @@ async def get_local_folder_file(request):
         return web.Response(text="Not found", status=404)
 
     ext = os.path.splitext(name)[1].lower()
-    if ext in AUDIO_CONTENT_TYPES:
+    ct = AUDIO_CONTENT_TYPES.get(ext) or VIDEO_CONTENT_TYPES.get(ext)
+    if ct:
         with open(filepath, 'rb') as f:
             data = f.read()
         return web.Response(
             body=data,
-            content_type=AUDIO_CONTENT_TYPES[ext],
-            headers={"Content-Disposition": f'attachment; filename="{name}"'}
+            content_type=ct,
+            headers={"Content-Disposition": f'inline; filename="{name}"'}
         )
     return web.FileResponse(filepath)
 

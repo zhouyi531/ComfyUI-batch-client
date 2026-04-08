@@ -376,6 +376,78 @@
         }
         .row-actions button:hover { background: rgba(255,255,255,0.08); }
 
+        /* Folder Load Mode */
+        .folder-load-section {
+            background: rgba(167, 139, 250, 0.05);
+            border: 1px dashed rgba(167, 139, 250, 0.3);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        .folder-load-section .folder-load-row {
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+        .folder-load-section .form-group { margin-bottom: 0; }
+        .folder-load-section .folder-file-count {
+            font-size: 0.8rem;
+            color: var(--success);
+            margin-top: 8px;
+        }
+        .folder-load-section .mode-toggle {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 12px;
+        }
+        .folder-load-section .mode-toggle button {
+            padding: 6px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--card-border);
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .folder-load-section .mode-toggle button.active {
+            background: var(--accent);
+            color: #1e1b4b;
+            border-color: var(--accent);
+            font-weight: 600;
+        }
+
+        /* Preview in batch rows */
+        .batch-preview-wrap {
+            flex: 0 0 100px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+        .batch-preview-wrap img,
+        .batch-preview-wrap video {
+            max-width: 120px;
+            max-height: 120px;
+            object-fit: contain;
+            border-radius: 8px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--card-border);
+        }
+        .batch-preview-wrap audio {
+            width: 120px;
+        }
+        .batch-preview-wrap .preview-filename {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            text-align: center;
+        }
+
         /* ==================== Browse Tab ==================== */
         .browse-local-row {
             display: flex;
@@ -937,6 +1009,29 @@
             <div class="card hidden" id="batchEditorCard">
                 <h2>📋 Batch Data Editor</h2>
                 <p style="color: var(--text-secondary); margin-bottom: 12px; font-size: 0.85rem;" id="batchVarsInfo"></p>
+
+                <!-- Folder Load Section -->
+                <div class="folder-load-section" id="folderLoadSection">
+                    <div class="mode-toggle">
+                        <button id="modeManualBtn" class="active" onclick="setBatchMode('manual')">Manual</button>
+                        <button id="modeFolderBtn" onclick="setBatchMode('folder')">Load from Folder</button>
+                    </div>
+                    <div id="folderLoadControls" class="hidden">
+                        <div class="folder-load-row">
+                            <div class="form-group" style="flex: 1; min-width: 200px;">
+                                <label>Folder Path (on server)</label>
+                                <input type="text" id="folderPathInput" placeholder="/path/to/media/folder" style="width: 100%;">
+                            </div>
+                            <div class="form-group" id="folderVarGroup">
+                                <label>Map files to variable</label>
+                                <select id="folderVarSelect"></select>
+                            </div>
+                            <button class="btn btn-secondary" id="loadFolderBtn" style="align-self: flex-end;">📂 Load Folder</button>
+                        </div>
+                        <p class="folder-file-count hidden" id="folderFileCount"></p>
+                    </div>
+                </div>
+
                 <div id="batchEditor"></div>
                 <div class="btn-group">
                     <button class="btn btn-secondary" id="addBatchRowBtn">+ Add Row</button>
@@ -1288,6 +1383,10 @@
         let batchWorkflow = null;
         let batchVariables = [];
         let batchData = [{}];
+        let batchFolderMode = false;
+        let batchFolderFiles = [];   // [{filename, url, type, path}, ...]
+        let batchFolderPath = '';
+        let batchFolderVarId = '';   // which variable receives the file path
 
         async function loadSavedData() {
             // Load workflows
@@ -1342,8 +1441,84 @@
             }
             
             $('batchVarsInfo').textContent = `Variables: ${batchVariables.map(v => v.alias).join(', ')}`;
+            setBatchMode('manual');
+            populateFolderVarSelect();
             renderBatchEditor();
             show($('batchEditorCard'));
+        };
+
+        // --- Folder mode helpers ---
+
+        window.setBatchMode = function(mode) {
+            batchFolderMode = (mode === 'folder');
+            $('modeManualBtn').classList.toggle('active', !batchFolderMode);
+            $('modeFolderBtn').classList.toggle('active', batchFolderMode);
+            if (batchFolderMode) {
+                show($('folderLoadControls'));
+            } else {
+                hide($('folderLoadControls'));
+                batchFolderFiles = [];
+                hide($('folderFileCount'));
+            }
+            renderBatchEditor();
+        };
+
+        function populateFolderVarSelect() {
+            const sel = $('folderVarSelect');
+            sel.innerHTML = '';
+            const fileVars = batchVariables.filter(v => isFileType(v));
+            if (fileVars.length === 0) {
+                sel.innerHTML = '<option value="">No file variables</option>';
+                return;
+            }
+            fileVars.forEach(v => {
+                sel.innerHTML += `<option value="${v.id}">${v.alias || v.field || v.id}</option>`;
+            });
+            batchFolderVarId = fileVars[0].id;
+            sel.onchange = () => { batchFolderVarId = sel.value; };
+        }
+
+        $('loadFolderBtn').onclick = async () => {
+            const folderPath = $('folderPathInput').value.trim();
+            if (!folderPath) { alert('Enter a folder path'); return; }
+            if (!batchFolderVarId) { alert('No file variable selected'); return; }
+
+            $('loadFolderBtn').disabled = true;
+            $('loadFolderBtn').textContent = 'Loading...';
+
+            try {
+                const res = await fetch('/api/local-folder?path=' + encodeURIComponent(folderPath));
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.error || res.statusText);
+                }
+                const data = await res.json();
+                batchFolderFiles = data.files || [];
+                batchFolderPath = data.resolved_path || folderPath;
+
+                if (batchFolderFiles.length === 0) {
+                    alert('No media files found in folder');
+                    return;
+                }
+
+                batchData = batchFolderFiles.map(f => {
+                    const row = {};
+                    batchVariables.forEach(v => row[v.id] = v.default || '');
+                    const fullPath = f.path || (batchFolderPath.replace(/\/+$/, '') + '/' + f.filename);
+                    row[batchFolderVarId] = fullPath;
+                    row._folderFile = f;
+                    return row;
+                });
+
+                $('folderFileCount').textContent = `✓ Loaded ${batchFolderFiles.length} files from ${batchFolderPath}`;
+                show($('folderFileCount'));
+                renderBatchEditor();
+            } catch (e) {
+                alert('Failed to load folder: ' + e.message);
+            } finally {
+                $('loadFolderBtn').disabled = false;
+                $('loadFolderBtn').textContent = '📂 Load Folder';
+            }
         };
 
         // Detect if a field is likely a file type
@@ -1376,9 +1551,45 @@
                 rowNum.className = 'row-number';
                 rowNum.textContent = `#${idx + 1}`;
                 rowDiv.appendChild(rowNum);
+
+                // In folder mode, show file preview
+                const folderFile = row._folderFile;
+                if (batchFolderMode && folderFile) {
+                    const previewWrap = document.createElement('div');
+                    previewWrap.className = 'batch-preview-wrap';
+                    if (folderFile.type === 'image') {
+                        const img = document.createElement('img');
+                        img.src = folderFile.url;
+                        img.alt = folderFile.filename;
+                        img.loading = 'lazy';
+                        previewWrap.appendChild(img);
+                    } else if (folderFile.type === 'video') {
+                        const vid = document.createElement('video');
+                        vid.src = folderFile.url;
+                        vid.muted = true;
+                        vid.preload = 'metadata';
+                        vid.onmouseenter = () => vid.play();
+                        vid.onmouseleave = () => { vid.pause(); vid.currentTime = 0; };
+                        previewWrap.appendChild(vid);
+                    } else if (folderFile.type === 'audio') {
+                        const aud = document.createElement('audio');
+                        aud.src = folderFile.url;
+                        aud.controls = true;
+                        aud.preload = 'metadata';
+                        previewWrap.appendChild(aud);
+                    }
+                    const fname = document.createElement('span');
+                    fname.className = 'preview-filename';
+                    fname.textContent = folderFile.filename;
+                    fname.title = folderFile.filename;
+                    previewWrap.appendChild(fname);
+                    rowDiv.appendChild(previewWrap);
+                }
                 
                 batchVariables.forEach((v, vIdx) => {
-                    // Create field container with label
+                    // In folder mode, skip rendering the mapped file variable as a full editor
+                    const isMappedFileVar = batchFolderMode && folderFile && v.id === batchFolderVarId;
+
                     const fieldDiv = document.createElement('div');
                     fieldDiv.className = 'batch-field';
                     
@@ -1386,9 +1597,14 @@
                     label.textContent = v.alias || v.field;
                     label.title = `${v.node_title || ''} → ${v.field}`;
                     fieldDiv.appendChild(label);
-                    
-                    if (isFileType(v)) {
-                        // File type - create container with text input + upload button
+
+                    if (isMappedFileVar) {
+                        const span = document.createElement('span');
+                        span.style.cssText = 'font-size: 0.8rem; color: var(--text-secondary); padding: 6px 0; word-break: break-all; max-width: 200px;';
+                        span.textContent = folderFile.filename;
+                        span.title = row[v.id];
+                        fieldDiv.appendChild(span);
+                    } else if (isFileType(v)) {
                         const container = document.createElement('div');
                         container.className = 'file-input-container';
                         
@@ -1431,7 +1647,6 @@
                         input.oninput = () => { batchData[idx][v.id] = input.value; };
                         fieldDiv.appendChild(input);
                     } else {
-                        // Text field — use textarea so it can be freely resized
                         const textarea = document.createElement('textarea');
                         textarea.placeholder = 'value';
                         textarea.value = row[v.id] || '';
@@ -1541,12 +1756,13 @@
                 
                 $('batchStatus').textContent = 'Running...';
                 
-                // Clean up _files from batch data before sending
                 const cleanBatchData = batchData.map(row => {
                     const clean = {...row};
                     delete clean._files;
+                    delete clean._folderFile;
                     return clean;
                 });
+                console.log('Batch data to send:', JSON.stringify(cleanBatchData, null, 2));
                 
                 const res = await fetch('/api/batch', {
                     method: 'POST',
