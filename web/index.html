@@ -3,8 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ComfyUI Client</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>ComfyUI Studio · Visual Batch Runner</title>
+    <meta name="theme-color" content="#08080f">
+    <meta name="description" content="Turn any ComfyUI workflow into a visual batch pipeline — upload images, run hundreds of jobs, export polished PDF reports.">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23b794ff'/%3E%3Cstop offset='1' stop-color='%236366f1'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect rx='26' width='100' height='100' fill='url(%23g)'/%3E%3Cpath d='M50 20 L59 41 L82 50 L59 59 L50 80 L41 59 L18 50 L41 41 Z' fill='white'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         :root {
@@ -204,6 +209,14 @@
 
         .form-group { margin-bottom: 16px; }
         .form-group label { display: block; font-weight: 500; margin-bottom: 6px; color: var(--text-secondary); font-size: 0.85rem; }
+        .form-group-row { display: flex; gap: 8px; align-items: center; }
+        .form-group-row input { flex: 1; }
+        .form-group .btn-delete-field {
+            background: transparent; border: 1px solid var(--card-border); color: var(--text-secondary);
+            padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; line-height: 1;
+            transition: all 0.15s ease; flex-shrink: 0;
+        }
+        .form-group .btn-delete-field:hover { border-color: var(--error); color: var(--error); background: rgba(239,68,68,0.1); }
         .form-group input[type="text"], .form-group input[type="number"], .form-group select {
             width: 100%;
             background: var(--input-bg);
@@ -375,6 +388,101 @@
             cursor: pointer;
         }
         .row-actions button:hover { background: rgba(255,255,255,0.08); }
+
+        /* Bool select */
+        .batch-field select {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid var(--card-border);
+            color: var(--text-primary);
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            width: 100%;
+            cursor: pointer;
+        }
+        .batch-field select:focus { outline: none; border-color: var(--accent); }
+
+        /* Range settings panel */
+        .range-settings-panel {
+            background: rgba(167, 139, 250, 0.05);
+            border: 1px solid rgba(167, 139, 250, 0.2);
+            border-radius: 12px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+        .range-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 14px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--accent);
+            user-select: none;
+        }
+        .range-header:hover { background: rgba(167, 139, 250, 0.05); }
+        .range-content {
+            padding: 0 14px 14px;
+        }
+        .range-settings-panel.collapsed .range-content { display: none; }
+        .range-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+        .range-row > label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            min-width: 100px;
+            font-weight: 500;
+        }
+        .range-row input[type="checkbox"] {
+            accent-color: var(--accent);
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+        .range-field-group {
+            display: inline-flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .range-field-group span {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+        .range-field-group input[type="number"] {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid var(--card-border);
+            color: var(--text-primary);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            width: 90px;
+        }
+        .range-field-group input[type="number"]:focus { outline: none; border-color: var(--accent); }
+        .range-info {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            margin-left: auto;
+        }
+        .range-info-badge {
+            font-size: 0.75rem;
+            color: var(--accent);
+            background: rgba(167, 139, 250, 0.1);
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 1px dashed rgba(167, 139, 250, 0.3);
+            white-space: nowrap;
+        }
+        .range-error {
+            font-size: 0.75rem;
+            color: var(--error);
+            margin-left: 8px;
+        }
 
         /* Folder Load Mode */
         .folder-load-section {
@@ -865,15 +973,636 @@
             padding: 6px 14px;
             border-radius: 20px;
         }
+        .random-seed-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+        }
+        .random-seed-wrap > input[type="number"],
+        .random-seed-wrap > input[type="text"] {
+            flex: 1;
+            min-width: 0;
+        }
+        .random-seed-toggle {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            white-space: nowrap;
+            font-size: 0.78rem;
+            color: var(--accent);
+            user-select: none;
+        }
+        .random-seed-toggle input[type="checkbox"] {
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+        .random-seed-badge {
+            display: inline-block;
+            font-size: 0.8rem;
+            color: var(--accent);
+            background: rgba(167, 139, 250, 0.12);
+            border: 1px solid rgba(167, 139, 250, 0.3);
+            padding: 5px 10px;
+            border-radius: 6px;
+            white-space: nowrap;
+        }
+
+        /* ============================================================
+           ✦ WORLD-CLASS REDESIGN — design system overrides
+           ============================================================ */
+        :root {
+            --bg-0: #08080f;
+            --bg-1: #0c0c16;
+            --card-bg: rgba(255, 255, 255, 0.045);
+            --card-bg-2: rgba(255, 255, 255, 0.07);
+            --card-border: rgba(255, 255, 255, 0.085);
+            --card-border-strong: rgba(255, 255, 255, 0.16);
+            --accent: #8b5cf6;
+            --accent-2: #6366f1;
+            --accent-3: #c084fc;
+            --accent-cyan: #22d3ee;
+            --accent-ink: #160f2e;
+            --accent-glow: rgba(139, 92, 246, 0.45);
+            --grad-primary: linear-gradient(135deg, #b794ff 0%, #8b5cf6 46%, #6366f1 100%);
+            --grad-text: linear-gradient(92deg, #d7c8ff 0%, #a78bfa 45%, #818cf8 100%);
+            --text-primary: #f4f4f8;
+            --text-secondary: #a6a6bd;
+            --text-tertiary: #74758c;
+            --input-bg: rgba(10, 11, 22, 0.6);
+            --success: #34d399;
+            --error: #fb7185;
+            --warning: #fbbf24;
+            --radius-sm: 10px;
+            --radius: 14px;
+            --radius-lg: 20px;
+            --radius-xl: 26px;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,.35);
+            --shadow: 0 18px 40px -22px rgba(0,0,0,.7);
+            --shadow-lg: 0 40px 80px -28px rgba(0,0,0,.75);
+            --font-display: 'Space Grotesk', 'Inter', sans-serif;
+            --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+            --maxw: 1180px;
+        }
+
+        html { scroll-behavior: smooth; }
+        body {
+            font-family: var(--font-body);
+            background: var(--bg-0);
+            color: var(--text-primary);
+            padding: 0;
+            position: relative;
+            z-index: 0;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
+            overflow-x: hidden;
+        }
+        body::before {
+            content: "";
+            position: fixed;
+            inset: -20% -10% auto -10%;
+            height: 120vh;
+            z-index: -2;
+            background:
+                radial-gradient(60% 55% at 12% 8%, rgba(124,58,237,.30), transparent 60%),
+                radial-gradient(50% 50% at 92% 0%, rgba(79,70,229,.26), transparent 60%),
+                radial-gradient(45% 45% at 78% 38%, rgba(34,211,238,.10), transparent 60%),
+                radial-gradient(55% 50% at 30% 60%, rgba(217,70,239,.12), transparent 60%);
+            filter: blur(8px);
+            animation: auroraFloat 22s ease-in-out infinite alternate;
+            pointer-events: none;
+        }
+        body::after {
+            content: "";
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background-image:
+                linear-gradient(rgba(255,255,255,.022) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,.022) 1px, transparent 1px);
+            background-size: 46px 46px;
+            mask-image: radial-gradient(circle at 50% 18%, #000 0%, transparent 78%);
+            -webkit-mask-image: radial-gradient(circle at 50% 18%, #000 0%, transparent 78%);
+            pointer-events: none;
+        }
+        @keyframes auroraFloat {
+            0%   { transform: translate3d(0,0,0) scale(1); }
+            100% { transform: translate3d(0,-3%,0) scale(1.08); }
+        }
+
+        .container {
+            max-width: var(--maxw);
+            margin: 0 auto;
+            padding: 26px 24px 80px;
+        }
+
+        ::selection { background: rgba(139,92,246,.35); color: #fff; }
+        ::-webkit-scrollbar { width: 12px; height: 12px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,.12);
+            border: 3px solid transparent;
+            border-radius: 999px;
+            background-clip: padding-box;
+        }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.22); background-clip: padding-box; }
+
+        /* ---------------- Header / brand ---------------- */
+        header {
+            margin-bottom: 14px;
+            padding: 14px 6px 0;
+            gap: 18px;
+        }
+        .brand { display: flex; align-items: center; gap: 14px; }
+        .brand-mark {
+            width: 44px; height: 44px;
+            border-radius: 13px;
+            display: grid; place-items: center;
+            color: #fff;
+            background: var(--grad-primary);
+            box-shadow: 0 10px 28px -8px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,.4);
+        }
+        .brand-mark svg { width: 60%; height: 60%; filter: drop-shadow(0 1px 1px rgba(0,0,0,.25)); }
+        .brand-mark.sm { width: 22px; height: 22px; border-radius: 7px; box-shadow: none; }
+        .brand-text { display: flex; flex-direction: column; line-height: 1.1; }
+        .logo {
+            font-family: var(--font-display);
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: none;
+            -webkit-text-fill-color: currentColor;
+            color: var(--text-primary);
+        }
+        .logo span {
+            background: var(--grad-text);
+            -webkit-background-clip: text; background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .brand-tagline { font-size: 0.78rem; color: var(--text-tertiary); font-weight: 500; letter-spacing: .01em; }
+
+        .toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .server-config {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 7px 8px 7px 14px;
+            backdrop-filter: blur(14px);
+            box-shadow: var(--shadow-sm);
+        }
+        .server-config label {
+            font-size: 0.7rem; text-transform: uppercase; letter-spacing: .08em;
+            color: var(--text-tertiary); font-weight: 600;
+        }
+        .server-config input {
+            background: var(--input-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            transition: border-color .2s, box-shadow .2s;
+        }
+        .server-config input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .server-status {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 9px 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            backdrop-filter: blur(14px);
+        }
+        .status-dot { width: 9px; height: 9px; }
+
+        /* ---------------- Hero ---------------- */
+        .hero { padding: 18px 6px 30px; max-width: 760px; }
+        .hero-eyebrow {
+            display: inline-flex; align-items: center; gap: 7px;
+            font-size: 0.74rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+            color: var(--accent-3);
+            background: rgba(139,92,246,.1);
+            border: 1px solid rgba(139,92,246,.28);
+            padding: 6px 13px; border-radius: 999px;
+            margin-bottom: 18px;
+        }
+        .hero-title {
+            font-family: var(--font-display);
+            font-size: clamp(1.9rem, 4.2vw, 3.1rem);
+            font-weight: 700;
+            line-height: 1.04;
+            letter-spacing: -0.035em;
+            margin-bottom: 14px;
+        }
+        .hero-title span {
+            background: var(--grad-text);
+            -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .hero-sub {
+            font-size: 1.02rem; line-height: 1.6; color: var(--text-secondary); max-width: 640px;
+        }
+
+        /* ---------------- Tabs (segmented) ---------------- */
+        .tabs {
+            display: inline-flex;
+            gap: 4px;
+            padding: 5px;
+            border-radius: 14px;
+            background: rgba(12,12,22,.55);
+            border: 1px solid var(--card-border);
+            backdrop-filter: blur(16px);
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 26px;
+        }
+        .tab {
+            flex: 0 1 auto;
+            padding: 10px 22px;
+            border-radius: 10px;
+            color: var(--text-secondary);
+            letter-spacing: .005em;
+            transition: color .2s, background .25s, box-shadow .25s, transform .15s;
+        }
+        .tab.active {
+            background: var(--grad-primary);
+            color: #fff;
+            box-shadow: 0 10px 24px -10px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,.3);
+        }
+        .tab:hover:not(.active) { background: rgba(255,255,255,.05); color: var(--text-primary); }
+
+        /* ---------------- Cards ---------------- */
+        .card {
+            background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.025));
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-lg);
+            padding: 26px 28px;
+            margin-bottom: 22px;
+            backdrop-filter: blur(22px) saturate(120%);
+            box-shadow: var(--shadow);
+            position: relative;
+            animation: cardRise .5s cubic-bezier(.22,.8,.3,1) both;
+        }
+        .card::before {
+            content: "";
+            position: absolute; inset: 0;
+            border-radius: inherit;
+            padding: 1px;
+            background: linear-gradient(160deg, rgba(255,255,255,.18), rgba(255,255,255,0) 38%);
+            -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            -webkit-mask-composite: xor; mask-composite: exclude;
+            pointer-events: none;
+        }
+        @keyframes cardRise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+        .card h2 {
+            font-family: var(--font-display);
+            font-size: 1.18rem;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+        }
+        .card-head {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 14px; margin-bottom: 14px; flex-wrap: wrap;
+        }
+        .card-head h2 { margin-bottom: 0; }
+        .step-badge {
+            background: var(--grad-primary);
+            color: #fff;
+            font-family: var(--font-display);
+            min-width: 24px; height: 24px;
+            display: inline-flex; align-items: center; justify-content: center;
+            border-radius: 8px;
+            box-shadow: 0 6px 16px -6px var(--accent-glow);
+        }
+
+        /* ---------------- Buttons ---------------- */
+        .btn {
+            padding: 11px 20px;
+            border-radius: 11px;
+            letter-spacing: .005em;
+            transition: transform .15s ease, box-shadow .25s ease, background .2s ease, border-color .2s ease, opacity .2s;
+            position: relative;
+        }
+        .btn-primary {
+            background: var(--grad-primary);
+            background-size: 160% 160%;
+            color: #fff;
+            box-shadow: 0 14px 30px -12px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,.32);
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 20px 40px -14px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,.4); }
+        .btn-primary:active { transform: translateY(0); }
+        .btn-secondary {
+            background: var(--card-bg-2);
+            color: var(--text-primary);
+            border: 1px solid var(--card-border-strong);
+            backdrop-filter: blur(10px);
+        }
+        .btn-secondary:hover { background: rgba(255,255,255,.12); border-color: var(--accent); transform: translateY(-1px); }
+        .btn-accent {
+            background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 55%, #6366f1 100%);
+            background-size: 160% 160%;
+            color: #fff;
+            box-shadow: 0 14px 30px -12px rgba(56,189,248,.55), inset 0 1px 0 rgba(255,255,255,.32);
+        }
+        .btn-accent:hover { transform: translateY(-2px); box-shadow: 0 20px 42px -14px rgba(56,189,248,.65), inset 0 1px 0 rgba(255,255,255,.4); }
+        .btn-accent:active { transform: translateY(0); }
+        .btn-danger {
+            background: rgba(251,113,133,.12);
+            color: #fecdd3;
+            border: 1px solid rgba(251,113,133,.4);
+        }
+        .btn-danger:hover { background: rgba(251,113,133,.22); border-color: rgba(251,113,133,.7); transform: translateY(-1px); }
+        .btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-glow); }
+
+        /* ---------------- Inputs ---------------- */
+        textarea,
+        .form-group input[type="text"], .form-group input[type="number"], .form-group select,
+        .browse-local-row input[type="text"] {
+            background: var(--input-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-sm);
+            transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+        }
+        textarea:focus,
+        .form-group input:focus, .form-group select:focus,
+        .browse-local-row input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+            background: rgba(10,11,22,.78);
+        }
+        .form-group label { font-size: 0.8rem; letter-spacing: .01em; }
+        select option { background: #14141f; color: var(--text-primary); }
+
+        .drop-zone {
+            border: 1.6px dashed var(--card-border-strong);
+            border-radius: var(--radius);
+            background: rgba(255,255,255,.02);
+            transition: border-color .2s, background .2s, transform .2s;
+        }
+        .drop-zone:hover { border-color: var(--accent); background: rgba(139,92,246,.07); transform: translateY(-1px); }
+        .drop-zone strong { color: var(--accent-3); }
+
+        /* ---------------- Tables ---------------- */
+        .table-wrapper { border-radius: var(--radius); border-color: var(--card-border); background: rgba(0,0,0,.18); }
+        th { letter-spacing: .07em; }
+        #varsTable tbody tr { transition: background .15s; }
+        #varsTable tbody tr:hover { background: rgba(255,255,255,.035); }
+        .node-badge { background: rgba(139,92,246,.18); color: var(--accent-3); border: 1px solid rgba(139,92,246,.28); }
+
+        /* ---------------- Messages ---------------- */
+        .error-msg { background: rgba(251,113,133,.1); border: 1px solid rgba(251,113,133,.3); color: #fecdd3; }
+        .success-msg { background: rgba(52,211,153,.1); border: 1px solid rgba(52,211,153,.3); color: #bbf7d0; }
+        .info-box { background: rgba(34,211,238,.08); border-left: 3px solid var(--accent-cyan); color: #a5f3fc; border-radius: 10px; }
+        .status-text { color: var(--text-secondary); font-size: .9rem; margin-bottom: 14px; }
+
+        /* ---------------- Mode toggle (segmented) ---------------- */
+        .folder-load-section {
+            background: rgba(139,92,246,.05);
+            border: 1px solid rgba(139,92,246,.18);
+            border-radius: var(--radius);
+            padding: 16px;
+        }
+        .folder-load-section .mode-toggle {
+            display: inline-flex; gap: 4px; padding: 4px;
+            background: rgba(0,0,0,.28); border: 1px solid var(--card-border);
+            border-radius: 12px; margin-bottom: 16px;
+        }
+        .folder-load-section .mode-toggle button {
+            border: none; border-radius: 9px; padding: 8px 16px; font-weight: 600;
+            color: var(--text-secondary); background: transparent;
+        }
+        .folder-load-section .mode-toggle button.active {
+            background: var(--grad-primary); color: #fff;
+            box-shadow: 0 8px 18px -8px var(--accent-glow);
+        }
+
+        /* ---------------- Upload dropzone ---------------- */
+        .upload-dropzone {
+            border: 1.6px dashed var(--card-border-strong);
+            border-radius: var(--radius);
+            background: rgba(255,255,255,.02);
+            padding: 30px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color .2s, background .2s, transform .2s;
+        }
+        .upload-dropzone:hover, .upload-dropzone.dragover {
+            border-color: var(--accent);
+            background: rgba(139,92,246,.09);
+            transform: translateY(-1px);
+        }
+        .upload-dropzone-icon {
+            width: 52px; height: 52px; margin: 0 auto 12px;
+            display: grid; place-items: center;
+            border-radius: 14px; font-size: 1.4rem;
+            background: rgba(139,92,246,.14); border: 1px solid rgba(139,92,246,.3);
+        }
+        .upload-dropzone-title { color: var(--text-primary); font-weight: 600; margin-bottom: 4px; }
+        .upload-dropzone-sub { color: var(--text-tertiary); font-size: 0.82rem; }
+        .upload-progress { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+        .upload-progress-bar { flex: 1; height: 8px; border-radius: 999px; background: rgba(255,255,255,.08); overflow: hidden; }
+        .upload-progress-bar span { display: block; height: 100%; width: 0; border-radius: 999px; background: var(--grad-primary); transition: width .25s ease; }
+        .upload-progress-label { font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .folder-load-section .folder-file-count { color: var(--success); font-weight: 500; }
+
+        /* ---------------- Batch rows ---------------- */
+        .batch-row {
+            background: rgba(255,255,255,.028);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            transition: border-color .2s, background .2s;
+        }
+        .batch-row:hover { border-color: rgba(139,92,246,.45); background: rgba(139,92,246,.04); }
+        .batch-row .row-number { background: var(--grad-primary); color: #fff; box-shadow: 0 6px 14px -6px var(--accent-glow); }
+        .batch-field input[type="number"], .batch-field input[type="text"], .batch-field textarea, .batch-field select { border-radius: 9px; }
+        .batch-field input:focus, .batch-field textarea:focus, .batch-field select:focus { box-shadow: 0 0 0 3px var(--accent-glow); }
+        .batch-preview-wrap img, .batch-preview-wrap video { border-radius: 10px; }
+        .range-settings-panel { background: rgba(139,92,246,.05); border-color: rgba(139,92,246,.2); border-radius: var(--radius); }
+        .range-info-badge { background: rgba(139,92,246,.12); border-color: rgba(139,92,246,.3); color: var(--accent-3); }
+
+        /* ---------------- Results grid ---------------- */
+        .result-item {
+            background: rgba(255,255,255,.03);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            transition: transform .2s, box-shadow .25s, border-color .2s;
+        }
+        .result-item:hover { transform: translateY(-3px); border-color: rgba(139,92,246,.5); box-shadow: var(--shadow); }
+
+        /* ---------------- Browse ---------------- */
+        .browse-batch-item { background: rgba(255,255,255,.028); border-radius: var(--radius); transition: all .2s; }
+        .browse-batch-item:hover { border-color: rgba(139,92,246,.5); background: rgba(139,92,246,.06); transform: translateX(2px); }
+        .browse-batch-item.active { border-color: var(--accent); background: rgba(139,92,246,.12); }
+        .browse-batch-badge { background: rgba(139,92,246,.18); color: var(--accent-3); border: 1px solid rgba(139,92,246,.28); font-variant-numeric: tabular-nums; }
+        .browse-gallery-item { background: rgba(255,255,255,.03); border-radius: var(--radius); }
+        .browse-gallery-item:hover { border-color: rgba(139,92,246,.5); box-shadow: var(--shadow); }
+        .browse-params-toggle, .browse-params-content .param-key { color: var(--accent-3); }
+        .browse-tree-root-list { background: rgba(0,0,0,.2); border-radius: var(--radius); }
+        .browse-tree-row--folder.selected { background: rgba(139,92,246,.16); outline-color: rgba(139,92,246,.4); }
+        .spinner { border-top-color: var(--accent); }
+
+        /* ---------------- Lightbox ---------------- */
+        .lightbox-overlay { background: rgba(5,5,10,.92); backdrop-filter: blur(14px); }
+        .lightbox-overlay img { border-radius: 12px; box-shadow: 0 30px 90px rgba(0,0,0,.7); }
+
+        /* ---------------- Footer ---------------- */
+        .app-footer {
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            margin-top: 46px; padding-top: 26px;
+            border-top: 1px solid var(--card-border);
+            color: var(--text-tertiary); font-size: 0.84rem;
+        }
+        .app-footer strong { color: var(--text-secondary); font-weight: 600; }
+        .app-footer .footer-dot { opacity: .5; }
+        .app-footer .brand-mark.sm { color: #fff; background: var(--grad-primary); }
+
+        /* ---------------- APIs tab ---------------- */
+        .api-list { display: flex; flex-direction: column; gap: 12px; }
+        .api-item {
+            display: flex; align-items: center; justify-content: space-between; gap: 16px;
+            padding: 18px 20px;
+            background: var(--card-bg-2);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            cursor: pointer;
+            transition: border-color .18s ease, transform .18s ease, background .18s ease, box-shadow .18s ease;
+        }
+        .api-item:hover {
+            border-color: var(--accent);
+            transform: translateY(-2px);
+            background: rgba(255,255,255,.04);
+            box-shadow: 0 18px 38px -22px var(--accent-glow);
+        }
+        .api-item-name { font-family: var(--font-display); font-size: 1.08rem; font-weight: 600; color: var(--text-primary); margin-bottom: 7px; }
+        .api-item-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: .8rem; color: var(--text-secondary); }
+        .api-item-meta > span:not(.api-chip)::before { content: '·'; margin-right: 10px; opacity: .5; }
+        .api-chip {
+            font-family: var(--font-mono, ui-monospace, monospace);
+            background: rgba(56,189,248,.14); color: #a5f3fc;
+            border: 1px solid rgba(56,189,248,.3);
+            padding: 3px 9px; border-radius: 999px; font-size: .74rem;
+        }
+        .api-item-date { font-size: .74rem; color: var(--text-muted); margin-top: 6px; }
+        .api-view { color: var(--accent-3); font-weight: 600; font-size: .9rem; white-space: nowrap; }
+        .api-empty { text-align: center; padding: 48px 20px; color: var(--text-secondary); }
+        .api-empty-icon { font-size: 2.6rem; margin-bottom: 12px; opacity: .8; }
+        .api-empty p { line-height: 1.6; }
+
+        .api-endpoint {
+            display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+            padding: 14px 16px; margin-bottom: 14px;
+            background: rgba(0,0,0,.28);
+            border: 1px solid var(--card-border-strong);
+            border-radius: var(--radius);
+        }
+        .api-method {
+            font-family: var(--font-mono, ui-monospace, monospace); font-weight: 700; font-size: .8rem;
+            background: linear-gradient(135deg, #10b981, #059669); color: #fff;
+            padding: 5px 12px; border-radius: 8px; letter-spacing: .06em;
+        }
+        .api-url-text { flex: 1; min-width: 200px; color: var(--accent-cyan); font-size: .9rem; word-break: break-all; background: none; }
+        .api-copy {
+            background: var(--card-bg-2); color: var(--text-primary);
+            border: 1px solid var(--card-border-strong); border-radius: 8px;
+            padding: 6px 14px; font-size: .8rem; font-weight: 600; cursor: pointer;
+            transition: all .15s ease; white-space: nowrap;
+        }
+        .api-copy:hover { border-color: var(--accent); background: rgba(255,255,255,.08); }
+        .api-copy.copied { background: rgba(52,211,153,.18); border-color: rgba(52,211,153,.5); color: #bbf7d0; }
+        .api-meta-row { display: flex; flex-wrap: wrap; gap: 18px; font-size: .82rem; color: var(--text-secondary); margin-bottom: 22px; }
+        .api-meta-row strong { color: var(--text-primary); }
+
+        .api-section { margin-bottom: 22px; }
+        .api-section > h3 { font-family: var(--font-display); font-size: .98rem; margin-bottom: 12px; color: var(--text-primary); }
+        .api-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+        .api-code-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+        .api-code-head h3 { font-family: var(--font-display); font-size: .98rem; color: var(--text-primary); }
+        .api-code {
+            background: #0a0b16; border: 1px solid var(--card-border);
+            border-radius: var(--radius-sm); padding: 14px 16px; margin: 0;
+            font-family: var(--font-mono, ui-monospace, monospace); font-size: .8rem; line-height: 1.55;
+            color: #c7d2fe; overflow-x: auto; white-space: pre; max-height: 360px;
+        }
+        .api-table-wrap { border: 1px solid var(--card-border); border-radius: var(--radius-sm); overflow: hidden; }
+        .api-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+        .api-table th {
+            text-align: left; padding: 11px 14px; background: rgba(255,255,255,.03);
+            color: var(--text-secondary); font-size: .72rem; letter-spacing: .07em; text-transform: uppercase;
+            border-bottom: 1px solid var(--card-border);
+        }
+        .api-table td { padding: 11px 14px; border-bottom: 1px solid rgba(255,255,255,.05); color: var(--text-secondary); vertical-align: middle; }
+        .api-table tr:last-child td { border-bottom: none; }
+        .api-table code { background: rgba(255,255,255,.06); padding: 2px 7px; border-radius: 6px; color: var(--accent-3); font-size: .82rem; }
+        .api-type { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: .72rem; font-weight: 600; }
+        .api-type-image { background: rgba(56,189,248,.14); color: #a5f3fc; border: 1px solid rgba(56,189,248,.3); }
+        .api-type-text { background: rgba(139,92,246,.16); color: #ddd6fe; border: 1px solid rgba(139,92,246,.3); }
+        .api-type-number { background: rgba(52,211,153,.14); color: #bbf7d0; border: 1px solid rgba(52,211,153,.3); }
+        .api-type-boolean { background: rgba(251,191,36,.14); color: #fde68a; border: 1px solid rgba(251,191,36,.3); }
+        .api-req { color: #fca5a5; font-weight: 600; font-size: .78rem; }
+        .api-opt { color: var(--text-muted); font-size: .78rem; }
+        .api-note { font-size: .78rem; color: var(--text-muted); margin-top: 10px; line-height: 1.5; }
+        .api-note code { background: rgba(255,255,255,.06); padding: 1px 6px; border-radius: 5px; color: var(--accent-cyan); }
+
+        .api-integration {
+            display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+            padding: 14px 16px; margin-bottom: 14px;
+            background: linear-gradient(135deg, rgba(56,189,248,.08), rgba(99,102,241,.08));
+            border: 1px solid rgba(56,189,248,.28);
+            border-radius: var(--radius);
+        }
+        .api-integration-text { display: flex; flex-direction: column; gap: 3px; min-width: 220px; flex: 1; }
+        .api-integration-text strong { color: var(--text-primary); font-size: .92rem; }
+        .api-integration-text span { color: var(--text-secondary); font-size: .78rem; line-height: 1.45; }
+        .api-integration-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .api-integration-actions .btn { padding: 9px 16px; font-size: .82rem; }
+        .btn.copied { filter: brightness(1.05); box-shadow: 0 0 0 2px rgba(52,211,153,.4) inset; }
+
+        .api-code-badge { font-family: var(--font-mono, ui-monospace, monospace); font-weight: 700; font-size: .76rem; padding: 2px 9px; border-radius: 7px; }
+        .api-code-ok { background: rgba(52,211,153,.16); color: #bbf7d0; border: 1px solid rgba(52,211,153,.32); }
+        .api-code-warn { background: rgba(251,191,36,.16); color: #fde68a; border: 1px solid rgba(251,191,36,.32); }
+        .api-code-err { background: rgba(251,113,133,.16); color: #fecdd3; border: 1px solid rgba(251,113,133,.32); }
+
+        .api-tryit { border-top: 1px solid var(--card-border); padding-top: 22px; margin-top: 6px; }
+        .api-try-field { margin-bottom: 12px; }
+        .api-try-type { font-size: .68rem; color: var(--accent-cyan); border: 1px solid rgba(56,189,248,.3); padding: 1px 7px; border-radius: 999px; margin-left: 6px; }
+        .api-try-result { margin-top: 16px; }
+        .api-try-images { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+        .api-try-images img { width: 100%; border-radius: var(--radius-sm); border: 1px solid var(--card-border); display: block; }
+
+        /* ---------------- Responsive ---------------- */
+        @media (max-width: 760px) {
+            header { flex-direction: column; align-items: flex-start; }
+            .toolbar { width: 100%; }
+            .server-config { flex: 1; }
+            .tabs { display: flex; width: 100%; }
+            .tab { flex: 1; padding: 10px 8px; font-size: 0.82rem; }
+            .card { padding: 20px 18px; }
+            .hero { padding-bottom: 22px; }
+            .api-grid { grid-template-columns: 1fr; }
+            .api-item { flex-direction: column; align-items: flex-start; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <div class="logo">ComfyUI Client</div>
-            <div class="server-config">
-                <label>Server:</label>
-                <input type="text" id="serverAddress" value="192.168.1.21:8188" placeholder="127.0.0.1:8188">
+            <div class="brand">
+                <div class="brand-mark" aria-hidden="true">
+                    <svg viewBox="0 0 100 100" width="100%" height="100%">
+                        <path d="M50 18 L60 40 L84 50 L60 60 L50 82 L40 60 L16 50 L40 40 Z" fill="currentColor"/>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <div class="logo">ComfyUI <span>Studio</span></div>
+                    <div class="brand-tagline">Visual batch runner</div>
+                </div>
+            </div>
+            <div class="toolbar">
+                <div class="server-config">
+                    <label>Server</label>
+                    <input type="text" id="serverAddress" value="192.168.1.21:8188" placeholder="127.0.0.1:8188">
+                </div>
                 <div class="server-status">
                     <span class="status-dot" id="statusDot"></span>
                     <span id="statusText">Checking...</span>
@@ -881,10 +1610,18 @@
             </div>
         </header>
 
+        <!-- Hero -->
+        <section class="hero">
+            <div class="hero-eyebrow">⚡ Workflow → Batch → PDF</div>
+            <h1 class="hero-title">Run any ComfyUI workflow at <span>scale</span></h1>
+            <p class="hero-sub">Expose the parameters you care about, upload a batch of images or point at a folder, launch hundreds of jobs, and export a beautiful PDF report of the results.</p>
+        </section>
+
         <!-- Tabs -->
         <div class="tabs">
             <button class="tab active" data-tab="single">📋 Data Template Builder</button>
             <button class="tab" data-tab="batch">🚀 Run Mode</button>
+            <button class="tab" data-tab="api">🔌 APIs</button>
             <button class="tab" data-tab="browse">🖼️ Browse</button>
         </div>
 
@@ -951,6 +1688,7 @@
                 <div class="btn-group">
                     <button class="btn btn-primary" id="saveWorkflowBtn">💾 Save Workflow</button>
                     <button class="btn btn-primary" id="saveTemplateBtn">📋 Save Data Template</button>
+                    <button class="btn btn-accent" id="createApiBtn">🔌 Create API</button>
                     <button class="btn btn-secondary" id="runBtn">🧪 Test Run</button>
                     <button class="btn btn-secondary" id="backToStep2">Back</button>
                 </div>
@@ -968,6 +1706,7 @@
                 <div class="btn-group">
                     <button class="btn btn-primary" id="saveWorkflowBtn2">💾 Save Workflow</button>
                     <button class="btn btn-primary" id="saveTemplateBtn2">📋 Save Data Template</button>
+                    <button class="btn btn-accent" id="createApiBtn2">🔌 Create API</button>
                     <button class="btn btn-secondary" id="runAgainBtn">Test Again</button>
                     <button class="btn btn-secondary" id="startOverBtn">Start Over</button>
                 </div>
@@ -1013,9 +1752,33 @@
                 <!-- Folder Load Section -->
                 <div class="folder-load-section" id="folderLoadSection">
                     <div class="mode-toggle">
-                        <button id="modeManualBtn" class="active" onclick="setBatchMode('manual')">Manual</button>
-                        <button id="modeFolderBtn" onclick="setBatchMode('folder')">Load from Folder</button>
+                        <button id="modeManualBtn" class="active" onclick="setBatchMode('manual')">✍️ Manual</button>
+                        <button id="modeUploadBtn" onclick="setBatchMode('upload')">⬆️ Upload Images</button>
+                        <button id="modeFolderBtn" onclick="setBatchMode('folder')">📂 Server Folder</button>
                     </div>
+
+                    <!-- Upload Images controls -->
+                    <div id="uploadControls" class="hidden">
+                        <div class="folder-load-row" style="margin-bottom: 12px;">
+                            <div class="form-group" id="uploadVarGroup" style="min-width: 220px;">
+                                <label>Map uploaded files to variable</label>
+                                <select id="uploadVarSelect"></select>
+                            </div>
+                        </div>
+                        <div class="upload-dropzone" id="batchUploadZone">
+                            <input type="file" id="batchUploadInput" accept="image/*,video/*,audio/*" multiple style="display:none;">
+                            <div class="upload-dropzone-icon">⬆️</div>
+                            <p class="upload-dropzone-title">Drop images here, or click to browse</p>
+                            <p class="upload-dropzone-sub">Select many files at once — each one becomes a batch job</p>
+                        </div>
+                        <div class="upload-progress hidden" id="uploadProgress">
+                            <div class="upload-progress-bar"><span id="uploadProgressFill"></span></div>
+                            <span class="upload-progress-label" id="uploadProgressLabel"></span>
+                        </div>
+                        <p class="folder-file-count hidden" id="uploadFileCount"></p>
+                    </div>
+
+                    <!-- Server Folder controls -->
                     <div id="folderLoadControls" class="hidden">
                         <div class="folder-load-row">
                             <div class="form-group" style="flex: 1; min-width: 200px;">
@@ -1036,15 +1799,50 @@
                 <div class="btn-group">
                     <button class="btn btn-secondary" id="addBatchRowBtn">+ Add Row</button>
                     <button class="btn btn-primary" id="runBatchBtn">🚀 Run Batch</button>
+                    <button class="btn btn-accent" id="createApiBatchBtn">🔌 Create API</button>
                     <button class="btn btn-secondary hidden" id="stopBatchBtn" style="background: var(--error);">⏹️ Stop</button>
                 </div>
             </div>
 
             <!-- Batch Results -->
             <div class="card hidden" id="batchResultsCard">
-                <h2>📸 Batch Results</h2>
+                <div class="card-head">
+                    <h2>📸 Batch Results</h2>
+                    <button class="btn btn-secondary hidden" id="exportBatchPdfBtn">📄 Export PDF</button>
+                </div>
                 <p class="status-text" id="batchStatus"></p>
                 <div id="batchResults" class="results-grid"></div>
+            </div>
+        </div>
+
+        <!-- ==================== APIs TAB ==================== -->
+        <div id="apiTab" class="tab-content">
+            <!-- API list -->
+            <div class="card" id="apiListCard">
+                <div class="card-head">
+                    <h2>🔌 Your APIs</h2>
+                    <button class="btn btn-secondary" id="refreshApisBtn">↻ Refresh</button>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 16px; line-height: 1.5;">
+                    Turn any workflow + parameter template into a callable HTTP endpoint. Create one from the
+                    <strong>Data Template Builder</strong> or <strong>Run Mode</strong> after your parameters are set.
+                    Image inputs must be <strong>public URLs</strong> — the server downloads them before running.
+                </p>
+                <div id="apiList" class="api-list">
+                    <div class="api-empty"><p>Loading…</p></div>
+                </div>
+            </div>
+
+            <!-- API detail -->
+            <div class="card hidden" id="apiDetailCard">
+                <div class="card-head">
+                    <h2 id="apiDetailTitle">🔌 API</h2>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-secondary" id="apiBackBtn">← Back to list</button>
+                        <button class="btn btn-danger" id="apiDeleteBtn">🗑️ Delete</button>
+                    </div>
+                </div>
+                <div id="apiDetailBody"></div>
             </div>
         </div>
 
@@ -1071,11 +1869,23 @@
                 </div>
             </div>
             <div class="card hidden" id="browseGalleryCard">
-                <h2 id="browseGalleryTitle">📸 Images</h2>
+                <div class="card-head">
+                    <h2 id="browseGalleryTitle">📸 Images</h2>
+                    <button class="btn btn-secondary" id="browseExportPdfBtn">📄 Export PDF</button>
+                </div>
                 <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.82rem;" id="browseGalleryMeta"></p>
                 <div id="browseGallery" class="browse-gallery"></div>
             </div>
         </div>
+
+        <footer class="app-footer">
+            <div class="brand-mark sm" aria-hidden="true">
+                <svg viewBox="0 0 100 100" width="100%" height="100%"><path d="M50 18 L60 40 L84 50 L60 60 L50 82 L40 60 L16 50 L40 40 Z" fill="currentColor"/></svg>
+            </div>
+            <span><strong>ComfyUI Studio</strong></span>
+            <span class="footer-dot">·</span>
+            <span>Batch runner &amp; PDF report exporter</span>
+        </footer>
     </div>
 
     <!-- Lightbox -->
@@ -1132,6 +1942,19 @@
         // Periodic status check every 30 seconds
         statusCheckInterval = setInterval(checkServerStatus, 30000);
 
+        // ==================== SEED HELPERS ====================
+        const COMFY_SEED_MAX = 1125899906842624n; // ComfyUI seed upper bound
+        const RANDOM_SEED_MARKER = '__random_seed__';
+
+        function isSeedVariable(v) {
+            const name = (v.field || v.alias || v.id || '').toLowerCase();
+            return name.includes('seed');
+        }
+
+        function generateRandomSeed() {
+            return Math.floor(Math.random() * Number(COMFY_SEED_MAX)).toString();
+        }
+
         // ==================== DATA TEMPLATE BUILDER ====================
         let currentWorkflow = null;
         let currentWorkflowName = null;
@@ -1142,6 +1965,7 @@
         async function loadSingleWorkflows() {
             const wfRes = await fetch('/api/workflows');
             const workflows = await wfRes.json();
+            workflows.sort((a, b) => a.name.localeCompare(b.name));
             const select = $('singleWorkflowSelect');
             select.innerHTML = '<option value="">-- Select Saved Workflow --</option>';
             workflows.forEach(w => {
@@ -1263,10 +2087,54 @@
             vars.forEach(v => {
                 const div = document.createElement('div');
                 div.className = 'form-group';
+                div.dataset.varId = v.id;
+
+                const isSeed = isSeedVariable(v);
+                const isRandom = v._randomSeed || false;
+
+                let inputHTML;
+                if (isSeed && v.type === 'number') {
+                    inputHTML = `
+                        <div class="random-seed-wrap">
+                            <input type="number" name="${v.id}" value="${isRandom ? '' : v.value}" ${isRandom ? 'disabled placeholder="🎲 Random"' : ''}>
+                            <label class="random-seed-toggle">
+                                <input type="checkbox" class="seed-random-cb" ${isRandom ? 'checked' : ''}> 🎲 Random
+                            </label>
+                        </div>
+                    `;
+                } else {
+                    inputHTML = `<input type="${v.type === 'number' ? 'number' : 'text'}" name="${v.id}" value="${v.value}">`;
+                }
+
                 div.innerHTML = `
                     <label>${v.alias} <span style="font-weight:normal; opacity:0.5; font-size:0.75rem;">(${v.node_id}.${v.field})</span></label>
-                    <input type="${v.type === 'number' ? 'number' : 'text'}" name="${v.id}" value="${v.value}">
+                    <div class="form-group-row">
+                        ${inputHTML}
+                        <button type="button" class="btn-delete-field" title="Remove this field">✕</button>
+                    </div>
                 `;
+
+                if (isSeed && v.type === 'number') {
+                    const cb = div.querySelector('.seed-random-cb');
+                    const inp = div.querySelector(`input[name="${v.id}"]`);
+                    cb.onchange = () => {
+                        v._randomSeed = cb.checked;
+                        if (cb.checked) {
+                            inp.disabled = true;
+                            inp.value = '';
+                            inp.placeholder = '🎲 Random';
+                        } else {
+                            inp.disabled = false;
+                            inp.placeholder = '';
+                            inp.value = v.value;
+                        }
+                    };
+                }
+
+                div.querySelector('.btn-delete-field').onclick = () => {
+                    selectedInputs = selectedInputs.filter(si => si.id !== v.id);
+                    div.remove();
+                };
                 form.appendChild(div);
             });
         }
@@ -1278,8 +2146,12 @@
             formData.append('server_address', $('serverAddress').value);
             
             selectedInputs.forEach(v => {
-                const input = document.querySelector(`#inputForm input[name="${v.id}"]`);
-                if (input) formData.append(`vars[${v.id}]`, input.value);
+                if (v._randomSeed) {
+                    formData.append(`vars[${v.id}]`, RANDOM_SEED_MARKER);
+                } else {
+                    const input = document.querySelector(`#inputForm input[name="${v.id}"]`);
+                    if (input) formData.append(`vars[${v.id}]`, input.value);
+                }
             });
 
             hide($('step3'));
@@ -1350,7 +2222,7 @@
                 name,
                 variables: selectedInputs.map(v => {
                     const input = document.querySelector(`#inputForm input[name="${v.id}"]`);
-                    return {
+                    const entry = {
                         id: v.id,
                         node_id: v.node_id,
                         node_title: v.node_title,
@@ -1359,6 +2231,8 @@
                         type: v.type,
                         default: input ? input.value : v.value
                     };
+                    if (v._randomSeed) entry.random_seed = true;
+                    return entry;
                 })
             };
             
@@ -1379,19 +2253,104 @@
         $('saveWorkflowBtn2').onclick = saveWorkflow;
         $('saveTemplateBtn2').onclick = saveTemplate;
 
+        // ==================== Create API ====================
+        function computeParamType(v) {
+            if (isFileType(v)) return 'image';
+            if (v.type === 'number') return 'number';
+            if (v.type === 'boolean') return 'boolean';
+            return 'text';
+        }
+
+        async function postCreateApi(name, workflow, workflowName, variables) {
+            const res = await fetch('/api/apis', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name, workflow,
+                    workflow_name: workflowName || name,
+                    server_address: $('serverAddress').value,
+                    variables
+                })
+            });
+            if (!res.ok) throw new Error(await res.text());
+            return await res.json();
+        }
+
+        async function createApiFromSingle() {
+            if (!currentWorkflow || !selectedInputs || selectedInputs.length === 0) {
+                alert('Select a workflow and configure variables before creating an API.');
+                return;
+            }
+            const name = prompt('Name your API (letters, numbers, - or _):');
+            if (!name || !name.trim()) return;
+            const variables = selectedInputs.map(v => {
+                const input = document.querySelector(`#inputForm [name="${v.id}"]`);
+                const entry = {
+                    id: v.id, node_id: v.node_id, node_title: v.node_title,
+                    field: v.field, alias: v.alias, type: v.type,
+                    default: input ? input.value : (v.value ?? ''),
+                    param_type: computeParamType(v)
+                };
+                if (v._randomSeed) entry.random_seed = true;
+                return entry;
+            });
+            try {
+                const data = await postCreateApi(name.trim(), currentWorkflow, currentWorkflowName, variables);
+                switchToTab('api');
+                await loadApis();
+                showApiDetail(data.id);
+            } catch (e) { alert('Error creating API: ' + e.message); }
+        }
+
+        async function createApiFromBatch() {
+            if (!batchWorkflow || !batchVariables || batchVariables.length === 0) {
+                alert('Load a workflow and template in Run Mode before creating an API.');
+                return;
+            }
+            const name = prompt('Name your API (letters, numbers, - or _):');
+            if (!name || !name.trim()) return;
+            const variables = batchVariables.map(v => {
+                const entry = {
+                    id: v.id, node_id: v.node_id, node_title: v.node_title,
+                    field: v.field || v.alias, alias: v.alias, type: v.type,
+                    default: v.default ?? '',
+                    param_type: computeParamType(v)
+                };
+                if (v._randomSeed || v.random_seed) entry.random_seed = true;
+                return entry;
+            });
+            try {
+                const data = await postCreateApi(name.trim(), batchWorkflow, $('batchWorkflowSelect').value, variables);
+                switchToTab('api');
+                await loadApis();
+                showApiDetail(data.id);
+            } catch (e) { alert('Error creating API: ' + e.message); }
+        }
+
+        $('createApiBtn').onclick = createApiFromSingle;
+        $('createApiBtn2').onclick = createApiFromSingle;
+        $('createApiBatchBtn').onclick = createApiFromBatch;
+
         // ==================== BATCH MODE ====================
         let batchWorkflow = null;
         let batchVariables = [];
         let batchData = [{}];
-        let batchFolderMode = false;
+        let batchInputMode = 'manual';   // 'manual' | 'upload' | 'folder'
+        let batchFolderMode = false;     // legacy alias kept in sync with batchInputMode === 'folder'
         let batchFolderFiles = [];   // [{filename, url, type, path}, ...]
         let batchFolderPath = '';
-        let batchFolderVarId = '';   // which variable receives the file path
+        let batchFolderVarId = '';   // which variable receives the file path (folder mode)
+        let batchUploadVarId = '';   // which variable receives the file path (upload mode)
+
+        function activeFileVarId() {
+            return batchInputMode === 'upload' ? batchUploadVarId : batchFolderVarId;
+        }
 
         async function loadSavedData() {
             // Load workflows
             const wfRes = await fetch('/api/workflows');
             const workflows = await wfRes.json();
+            workflows.sort((a, b) => a.name.localeCompare(b.name));
             const wfSelect = $('batchWorkflowSelect');
             wfSelect.innerHTML = '<option value="">-- Select Workflow --</option>';
             workflows.forEach(w => {
@@ -1401,6 +2360,7 @@
             // Load templates
             const tplRes = await fetch('/api/templates');
             const templates = await tplRes.json();
+            templates.sort((a, b) => a.name.localeCompare(b.name));
             const tplSelect = $('batchTemplateSelect');
             tplSelect.innerHTML = '<option value="">-- Select Template --</option>';
             templates.forEach(t => {
@@ -1423,8 +2383,13 @@
                 const tplRes = await fetch(`/api/templates/${tplName}`);
                 const template = await tplRes.json();
                 batchVariables = template.variables || [];
+                batchVariables.forEach(v => {
+                    if (v.random_seed) v._randomSeed = true;
+                });
                 batchData = [{}];
-                batchVariables.forEach(v => batchData[0][v.id] = v.default || '');
+                batchVariables.forEach(v => {
+                    batchData[0][v.id] = v._randomSeed ? RANDOM_SEED_MARKER : (v.default || '');
+                });
             } else {
                 // Scan workflow for variables
                 const scanRes = await fetch('/api/scan', {
@@ -1443,6 +2408,7 @@
             $('batchVarsInfo').textContent = `Variables: ${batchVariables.map(v => v.alias).join(', ')}`;
             setBatchMode('manual');
             populateFolderVarSelect();
+            populateUploadVarSelect();
             renderBatchEditor();
             show($('batchEditorCard'));
         };
@@ -1450,13 +2416,16 @@
         // --- Folder mode helpers ---
 
         window.setBatchMode = function(mode) {
+            batchInputMode = mode;
             batchFolderMode = (mode === 'folder');
-            $('modeManualBtn').classList.toggle('active', !batchFolderMode);
-            $('modeFolderBtn').classList.toggle('active', batchFolderMode);
-            if (batchFolderMode) {
-                show($('folderLoadControls'));
-            } else {
-                hide($('folderLoadControls'));
+            $('modeManualBtn').classList.toggle('active', mode === 'manual');
+            $('modeUploadBtn').classList.toggle('active', mode === 'upload');
+            $('modeFolderBtn').classList.toggle('active', mode === 'folder');
+
+            $('folderLoadControls').classList.toggle('hidden', mode !== 'folder');
+            $('uploadControls').classList.toggle('hidden', mode !== 'upload');
+
+            if (mode === 'folder') {
                 batchFolderFiles = [];
                 hide($('folderFileCount'));
             }
@@ -1477,6 +2446,113 @@
             batchFolderVarId = fileVars[0].id;
             sel.onchange = () => { batchFolderVarId = sel.value; };
         }
+
+        // --- Upload Images mode helpers ---
+
+        function populateUploadVarSelect() {
+            const sel = $('uploadVarSelect');
+            sel.innerHTML = '';
+            const fileVars = batchVariables.filter(v => isFileType(v));
+            if (fileVars.length === 0) {
+                sel.innerHTML = '<option value="">No file variables</option>';
+                batchUploadVarId = '';
+                return;
+            }
+            fileVars.forEach(v => {
+                sel.innerHTML += `<option value="${v.id}">${v.alias || v.field || v.id}</option>`;
+            });
+            batchUploadVarId = fileVars[0].id;
+            sel.onchange = () => { batchUploadVarId = sel.value; };
+        }
+
+        function guessFileType(file) {
+            const t = (file.type || '').split('/')[0];
+            if (t === 'image' || t === 'video' || t === 'audio') return t;
+            const ext = (file.name.split('.').pop() || '').toLowerCase();
+            if (['png','jpg','jpeg','webp','bmp','gif'].includes(ext)) return 'image';
+            if (['mp4','webm','mov','avi','mkv'].includes(ext)) return 'video';
+            if (['mp3','wav','flac','ogg','aac','m4a'].includes(ext)) return 'audio';
+            return 'image';
+        }
+
+        async function handleBatchUploads(fileList) {
+            const files = Array.from(fileList || []);
+            if (files.length === 0) return;
+            if (!batchUploadVarId) { alert('No file variable available to map uploads to.'); return; }
+
+            const progress = $('uploadProgress');
+            const fill = $('uploadProgressFill');
+            const label = $('uploadProgressLabel');
+            show(progress);
+            hide($('uploadFileCount'));
+            fill.style.width = '0%';
+            label.textContent = `Uploading 0 / ${files.length}`;
+
+            const rows = [];
+            let done = 0;
+            const concurrency = 4;
+            let cursor = 0;
+
+            async function worker() {
+                while (cursor < files.length) {
+                    const myIndex = cursor++;
+                    const file = files[myIndex];
+                    try {
+                        const fd = new FormData();
+                        fd.append('file', file);
+                        const res = await fetch('/api/upload', { method: 'POST', body: fd });
+                        if (!res.ok) throw new Error(await res.text());
+                        const data = await res.json();
+                        const row = {};
+                        batchVariables.forEach(v => {
+                            row[v.id] = v._randomSeed ? RANDOM_SEED_MARKER : (v.default || '');
+                        });
+                        row[batchUploadVarId] = data.path;
+                        row._folderFile = {
+                            url: URL.createObjectURL(file),
+                            filename: file.name,
+                            type: guessFileType(file),
+                        };
+                        rows[myIndex] = row;
+                    } catch (e) {
+                        console.error('Upload failed for', file.name, e);
+                    } finally {
+                        done++;
+                        fill.style.width = `${Math.round((done / files.length) * 100)}%`;
+                        label.textContent = `Uploading ${done} / ${files.length}`;
+                    }
+                }
+            }
+
+            await Promise.all(Array.from({ length: Math.min(concurrency, files.length) }, worker));
+
+            const ok = rows.filter(Boolean);
+            if (ok.length === 0) {
+                hide(progress);
+                alert('All uploads failed. Check the server logs.');
+                return;
+            }
+            batchData = ok;
+            hide(progress);
+            $('uploadFileCount').textContent = `✓ Uploaded ${ok.length} file${ok.length !== 1 ? 's' : ''} — ready to run batch`;
+            show($('uploadFileCount'));
+            renderBatchEditor();
+        }
+
+        (function wireBatchUpload() {
+            const zone = $('batchUploadZone');
+            const input = $('batchUploadInput');
+            if (!zone || !input) return;
+            zone.onclick = () => input.click();
+            input.onchange = (e) => { handleBatchUploads(e.target.files); input.value = ''; };
+            zone.ondragover = (e) => { e.preventDefault(); zone.classList.add('dragover'); };
+            zone.ondragleave = () => zone.classList.remove('dragover');
+            zone.ondrop = (e) => {
+                e.preventDefault();
+                zone.classList.remove('dragover');
+                handleBatchUploads(e.dataTransfer.files);
+            };
+        })();
 
         $('loadFolderBtn').onclick = async () => {
             const folderPath = $('folderPathInput').value.trim();
@@ -1503,7 +2579,9 @@
 
                 batchData = batchFolderFiles.map(f => {
                     const row = {};
-                    batchVariables.forEach(v => row[v.id] = v.default || '');
+                    batchVariables.forEach(v => {
+                        row[v.id] = v._randomSeed ? RANDOM_SEED_MARKER : (v.default || '');
+                    });
                     const fullPath = f.path || (batchFolderPath.replace(/\/+$/, '') + '/' + f.filename);
                     row[batchFolderVarId] = fullPath;
                     row._folderFile = f;
@@ -1540,7 +2618,105 @@
         function renderBatchEditor() {
             const editor = $('batchEditor');
             editor.innerHTML = '';
-            
+
+            // Range settings panel for numeric variables
+            const numVars = batchVariables.filter(v => v.type === 'number');
+            if (numVars.length > 0) {
+                const rangePanel = document.createElement('div');
+                rangePanel.className = 'range-settings-panel';
+                rangePanel.id = 'rangeSettingsPanel';
+
+                const rangeHeader = document.createElement('div');
+                rangeHeader.className = 'range-header';
+                rangeHeader.innerHTML = '<span>📐 Numeric Range Settings</span><span class="range-toggle-arrow">▼</span>';
+                rangeHeader.onclick = () => {
+                    rangePanel.classList.toggle('collapsed');
+                    rangeHeader.querySelector('.range-toggle-arrow').textContent =
+                        rangePanel.classList.contains('collapsed') ? '▶' : '▼';
+                };
+                rangePanel.appendChild(rangeHeader);
+
+                const rangeContent = document.createElement('div');
+                rangeContent.className = 'range-content';
+
+                numVars.forEach(v => {
+                    if (!v._range) v._range = { enabled: false, start: '', end: '', step: '' };
+                    if (v._randomSeed === undefined && isSeedVariable(v)) v._randomSeed = false;
+                    const range = v._range;
+
+                    const row = document.createElement('div');
+                    row.className = 'range-row';
+
+                    const label = document.createElement('label');
+                    label.textContent = v.alias || v.field;
+                    label.title = `${v.node_title || ''} → ${v.field}`;
+                    row.appendChild(label);
+
+                    if (isSeedVariable(v)) {
+                        const randomLabel = document.createElement('label');
+                        randomLabel.className = 'random-seed-toggle';
+                        const randomCb = document.createElement('input');
+                        randomCb.type = 'checkbox';
+                        randomCb.checked = !!v._randomSeed;
+                        randomCb.title = 'Random seed per job';
+                        randomCb.onchange = () => {
+                            v._randomSeed = randomCb.checked;
+                            if (randomCb.checked) {
+                                v._range.enabled = false;
+                                batchData.forEach(r => { r[v.id] = RANDOM_SEED_MARKER; });
+                            }
+                            renderBatchEditor();
+                        };
+                        randomLabel.appendChild(randomCb);
+                        randomLabel.appendChild(document.createTextNode(' 🎲 Random'));
+                        row.appendChild(randomLabel);
+                    }
+
+                    if (!v._randomSeed) {
+                        const toggle = document.createElement('input');
+                        toggle.type = 'checkbox';
+                        toggle.checked = range.enabled;
+                        toggle.title = 'Enable range loop';
+                        toggle.onchange = () => {
+                            range.enabled = toggle.checked;
+                            renderBatchEditor();
+                        };
+                        row.appendChild(toggle);
+
+                        if (range.enabled) {
+                            [{ key: 'start', label: 'Start' }, { key: 'end', label: 'End' }, { key: 'step', label: 'Step' }].forEach(f => {
+                                const group = document.createElement('div');
+                                group.className = 'range-field-group';
+                                const lbl = document.createElement('span');
+                                lbl.textContent = f.label;
+                                const inp = document.createElement('input');
+                                inp.type = 'number';
+                                inp.step = 'any';
+                                inp.placeholder = f.label;
+                                inp.value = range[f.key];
+                                inp.oninput = () => {
+                                    range[f.key] = inp.value;
+                                    updateRangeInfo(row, range);
+                                };
+                                group.appendChild(lbl);
+                                group.appendChild(inp);
+                                row.appendChild(group);
+                            });
+
+                            const info = document.createElement('span');
+                            info.className = 'range-info';
+                            row.appendChild(info);
+                            updateRangeInfo(row, range);
+                        }
+                    }
+
+                    rangeContent.appendChild(row);
+                });
+
+                rangePanel.appendChild(rangeContent);
+                editor.appendChild(rangePanel);
+            }
+
             batchData.forEach((row, idx) => {
                 const rowDiv = document.createElement('div');
                 rowDiv.className = 'batch-row';
@@ -1552,9 +2728,10 @@
                 rowNum.textContent = `#${idx + 1}`;
                 rowDiv.appendChild(rowNum);
 
-                // In folder mode, show file preview
+                // In folder / upload mode, show file preview
                 const folderFile = row._folderFile;
-                if (batchFolderMode && folderFile) {
+                const previewMode = (batchInputMode === 'folder' || batchInputMode === 'upload');
+                if (previewMode && folderFile) {
                     const previewWrap = document.createElement('div');
                     previewWrap.className = 'batch-preview-wrap';
                     if (folderFile.type === 'image') {
@@ -1587,8 +2764,7 @@
                 }
                 
                 batchVariables.forEach((v, vIdx) => {
-                    // In folder mode, skip rendering the mapped file variable as a full editor
-                    const isMappedFileVar = batchFolderMode && folderFile && v.id === batchFolderVarId;
+                    const isMappedFileVar = previewMode && folderFile && v.id === activeFileVarId();
 
                     const fieldDiv = document.createElement('div');
                     fieldDiv.className = 'batch-field';
@@ -1639,13 +2815,33 @@
                         container.appendChild(fileInput);
                         container.appendChild(uploadBtn);
                         fieldDiv.appendChild(container);
+                    } else if (v.type === 'boolean') {
+                        const select = document.createElement('select');
+                        select.innerHTML = '<option value="true">true</option><option value="false">false</option>';
+                        select.value = String(row[v.id] ?? true);
+                        select.onchange = () => { batchData[idx][v.id] = select.value; };
+                        fieldDiv.appendChild(select);
                     } else if (v.type === 'number') {
-                        const input = document.createElement('input');
-                        input.type = 'number';
-                        input.placeholder = '0';
-                        input.value = row[v.id] || '';
-                        input.oninput = () => { batchData[idx][v.id] = input.value; };
-                        fieldDiv.appendChild(input);
+                        if (v._randomSeed) {
+                            const badge = document.createElement('span');
+                            badge.className = 'random-seed-badge';
+                            badge.textContent = '🎲 Random Seed';
+                            fieldDiv.appendChild(badge);
+                        } else if (v._range && v._range.enabled) {
+                            const badge = document.createElement('span');
+                            badge.className = 'range-info-badge';
+                            const r = v._range;
+                            badge.textContent = `📐 ${r.start} → ${r.end} (step ${r.step})`;
+                            fieldDiv.appendChild(badge);
+                        } else {
+                            const input = document.createElement('input');
+                            input.type = 'number';
+                            input.step = 'any';
+                            input.placeholder = '0';
+                            input.value = row[v.id] ?? '';
+                            input.oninput = () => { batchData[idx][v.id] = input.value; };
+                            fieldDiv.appendChild(input);
+                        }
                     } else {
                         const textarea = document.createElement('textarea');
                         textarea.placeholder = 'value';
@@ -1660,11 +2856,25 @@
                 
                 const actions = document.createElement('div');
                 actions.className = 'row-actions';
-                actions.innerHTML = `<button onclick="deleteBatchRow(${idx})">🗑️</button>`;
+                actions.innerHTML = `<button onclick="copyBatchRow(${idx})" title="Duplicate row">📋</button><button onclick="deleteBatchRow(${idx})" title="Delete row">🗑️</button>`;
                 rowDiv.appendChild(actions);
                 
                 editor.appendChild(rowDiv);
             });
+        }
+
+        function updateRangeInfo(rowEl, range) {
+            const info = rowEl.querySelector('.range-info');
+            if (!info) return;
+            const s = parseFloat(range.start), e = parseFloat(range.end), st = parseFloat(range.step);
+            if (isNaN(s) || isNaN(e) || isNaN(st) || st === 0) {
+                info.textContent = '';
+                return;
+            }
+            const effectiveStep = Math.abs(st);
+            const count = Math.floor(Math.abs(e - s) / effectiveStep) + 1;
+            const dir = s > e ? '↓' : '↑';
+            info.textContent = `${dir} ${count} values`;
         }
 
         window.deleteBatchRow = function(idx) {
@@ -1674,9 +2884,24 @@
             }
         };
 
+        window.copyBatchRow = function(idx) {
+            const src = batchData[idx];
+            const newRow = {};
+            for (const key of Object.keys(src)) {
+                if (key === '_files' || key === '_folderFile') continue;
+                newRow[key] = src[key];
+            }
+            batchData.splice(idx + 1, 0, newRow);
+            renderBatchEditor();
+        };
+
         $('addBatchRowBtn').onclick = () => {
             const newRow = {};
-            batchVariables.forEach(v => newRow[v.id] = '');
+            batchVariables.forEach(v => {
+                if (v._randomSeed) newRow[v.id] = RANDOM_SEED_MARKER;
+                else if (v.type === 'boolean') newRow[v.id] = v.default != null ? String(v.default) : 'true';
+                else newRow[v.id] = v.default != null ? v.default : '';
+            });
             batchData.push(newRow);
             renderBatchEditor();
         };
@@ -1739,6 +2964,62 @@
             }
         }
 
+        function cartesianProduct(arrays) {
+            if (arrays.length === 0) return [[]];
+            return arrays.reduce((acc, arr) => {
+                const result = [];
+                for (const combo of acc) {
+                    for (const val of arr) {
+                        result.push([...combo, val]);
+                    }
+                }
+                return result;
+            }, [[]]);
+        }
+
+        function expandRanges(rows) {
+            const rangeVars = batchVariables.filter(v => v.type === 'number' && v._range && v._range.enabled);
+            if (rangeVars.length === 0) return rows;
+
+            const rangeValues = {};
+            for (const v of rangeVars) {
+                const { start, end, step } = v._range;
+                const s = parseFloat(start), e = parseFloat(end), st = parseFloat(step);
+                if (isNaN(s) || isNaN(e) || isNaN(st) || st === 0) {
+                    alert(`Invalid range for "${v.alias || v.field}": start/end/step must be numbers and step ≠ 0`);
+                    return null;
+                }
+                const effectiveStep = s <= e ? Math.abs(st) : -Math.abs(st);
+                const values = [];
+                const maxIter = 10000;
+                if (effectiveStep > 0) {
+                    for (let val = s, i = 0; val <= e + Math.abs(effectiveStep) * 1e-9 && i < maxIter; val += effectiveStep, i++)
+                        values.push(parseFloat(val.toPrecision(10)));
+                } else {
+                    for (let val = s, i = 0; val >= e - Math.abs(effectiveStep) * 1e-9 && i < maxIter; val += effectiveStep, i++)
+                        values.push(parseFloat(val.toPrecision(10)));
+                }
+                if (values.length === 0) {
+                    alert(`Range for "${v.alias || v.field}" produced no values`);
+                    return null;
+                }
+                rangeValues[v.id] = values;
+            }
+
+            const varIds = Object.keys(rangeValues);
+            const combos = cartesianProduct(varIds.map(id => rangeValues[id]));
+
+            const expanded = [];
+            for (const row of rows) {
+                for (const combo of combos) {
+                    const newRow = { ...row };
+                    combo.forEach((val, i) => { newRow[varIds[i]] = String(val); });
+                    expanded.push(newRow);
+                }
+            }
+            return expanded;
+        }
+
         $('runBatchBtn').onclick = async () => {
             if (!batchWorkflow) { alert('Load a workflow first'); return; }
             
@@ -1746,23 +3027,33 @@
             currentBatchJobId = null;
             $('runBatchBtn').disabled = true;
             show($('stopBatchBtn'));
+            hide($('exportBatchPdfBtn'));
             $('batchStatus').textContent = 'Uploading files...';
             show($('batchResultsCard'));
             $('batchResults').innerHTML = '';
 
             try {
-                // First upload any browser-selected files
                 await uploadBrowserFiles();
                 
-                $('batchStatus').textContent = 'Running...';
-                
-                const cleanBatchData = batchData.map(row => {
+                $('batchStatus').textContent = 'Expanding ranges...';
+
+                let cleanBatchData = batchData.map(row => {
                     const clean = {...row};
                     delete clean._files;
                     delete clean._folderFile;
                     return clean;
                 });
-                console.log('Batch data to send:', JSON.stringify(cleanBatchData, null, 2));
+
+                cleanBatchData = expandRanges(cleanBatchData);
+                if (!cleanBatchData) {
+                    $('runBatchBtn').disabled = false;
+                    hide($('stopBatchBtn'));
+                    $('batchStatus').textContent = 'Range validation failed.';
+                    return;
+                }
+
+                console.log(`Batch data to send: ${cleanBatchData.length} rows (after range expansion)`);
+                $('batchStatus').textContent = `Running ${cleanBatchData.length} jobs...`;
                 
                 const res = await fetch('/api/batch', {
                     method: 'POST',
@@ -1788,9 +3079,9 @@
                 }
                 
                 displayBatchResults(data.results);
+                if (data.completed > 0) show($('exportBatchPdfBtn'));
             } catch (e) {
                 if (e.name === 'AbortError') {
-                    // Fetch was aborted, but we may have partial results via cancel API
                     $('batchStatus').textContent = 'Stopping...';
                 } else {
                     $('batchStatus').textContent = 'Error: ' + e.message;
@@ -1824,12 +3115,61 @@
                     const cancelRes = await fetch(`/api/batch/${latestJob}/cancel`, { method: 'POST' });
                     if (cancelRes.ok) {
                         const cancelData = await cancelRes.json();
+                        currentBatchJobId = cancelData.job_id || latestJob;
                         $('batchStatus').textContent = `Stopped: ${cancelData.completed} completed. Output: ${cancelData.job_id}`;
                         displayBatchResults(cancelData.results);
+                        if ((cancelData.completed || 0) > 0) show($('exportBatchPdfBtn'));
                     }
                 }
             } catch (e) {
                 console.log('Cancel API error:', e);
+            }
+        };
+
+        // ==================== PDF Export ====================
+        function triggerDownload(url) {
+            const a = document.createElement('a');
+            a.href = url;
+            a.rel = 'noopener';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        }
+
+        async function exportPdf(url, btn) {
+            const original = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Building PDF…'; }
+            try {
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(await res.text());
+                const blob = await res.blob();
+                const cd = res.headers.get('Content-Disposition') || '';
+                let name = 'report.pdf';
+                const m = cd.match(/filename\*?=(?:UTF-8'')?\"?([^\";]+)\"?/i);
+                if (m) { try { name = decodeURIComponent(m[1]); } catch { name = m[1]; } }
+                const objUrl = URL.createObjectURL(blob);
+                triggerDownload(objUrl);
+                setTimeout(() => URL.revokeObjectURL(objUrl), 4000);
+            } catch (e) {
+                alert('PDF export failed: ' + e.message);
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = original; }
+            }
+        }
+
+        $('exportBatchPdfBtn').onclick = () => {
+            if (!currentBatchJobId) { alert('Run a batch first.'); return; }
+            exportPdf(`/api/pdf/job/${encodeURIComponent(currentBatchJobId)}`, $('exportBatchPdfBtn'));
+        };
+
+        $('browseExportPdfBtn').onclick = () => {
+            const btn = $('browseExportPdfBtn');
+            if (browseCurrentJobId) {
+                exportPdf(`/api/pdf/job/${encodeURIComponent(browseCurrentJobId)}`, btn);
+            } else if (browseCurrentLocalPath) {
+                exportPdf(`/api/pdf/local?path=${encodeURIComponent(browseCurrentLocalPath)}`, btn);
+            } else {
+                alert('Open a batch or local folder first.');
             }
         };
 
@@ -1857,6 +3197,7 @@
         let browseCurrentImages = [];
         let browseLightboxIndex = 0;
         let browseCurrentJobId = null;
+        let browseCurrentLocalPath = null;
         let browseTreeAnchor = null;
         let browseGalleryAllFiles = [];
         let browseGalleryNextIndex = 0;
@@ -1980,6 +3321,7 @@
         async function loadLocalGalleryForPath(resolvedPath) {
             document.querySelectorAll('.browse-batch-item').forEach(el => el.classList.remove('active'));
             browseCurrentJobId = null;
+            browseCurrentLocalPath = resolvedPath;
             const galleryCard = $('browseGalleryCard');
             const gallery = $('browseGallery');
             gallery.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading...</p></div>';
@@ -2215,6 +3557,7 @@
             document.querySelectorAll('.browse-batch-item').forEach(el => el.classList.remove('active'));
             if (clickedItem) clickedItem.classList.add('active');
             browseCurrentJobId = jobId;
+            browseCurrentLocalPath = null;
 
             const galleryCard = $('browseGalleryCard');
             const gallery = $('browseGallery');
@@ -2524,6 +3867,306 @@
             if (e.key === 'Delete' && browseCurrentJobId) $('lightboxDelete').click();
         });
 
+        // ==================== APIs Tab ====================
+        let apiCurrentDef = null;
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        async function copyToClipboard(text, btn) {
+            try {
+                await navigator.clipboard.writeText(text);
+            } catch (e) {
+                const ta = document.createElement('textarea');
+                ta.value = text; document.body.appendChild(ta); ta.select();
+                try { document.execCommand('copy'); } catch (_) {}
+                document.body.removeChild(ta);
+            }
+            if (btn) {
+                const old = btn.textContent;
+                btn.textContent = '✓ Copied';
+                btn.classList.add('copied');
+                setTimeout(() => { btn.textContent = old; btn.classList.remove('copied'); }, 1400);
+            }
+        }
+
+        async function loadApis() {
+            const list = $('apiList');
+            try {
+                const res = await fetch('/api/apis');
+                const apis = await res.json();
+                if (!apis.length) {
+                    list.innerHTML = '<div class="api-empty"><div class="api-empty-icon">🔌</div><p>No APIs yet.<br>Create one from the <strong>Data Template Builder</strong> or <strong>Run Mode</strong> once your parameters are set.</p></div>';
+                    return;
+                }
+                list.innerHTML = apis.map(a => `
+                    <div class="api-item" data-id="${escapeHtml(a.id)}">
+                        <div class="api-item-main">
+                            <div class="api-item-name">🔌 ${escapeHtml(a.name)}</div>
+                            <div class="api-item-meta">
+                                <span class="api-chip">POST /api/v1/${escapeHtml(a.id)}</span>
+                                <span>${a.param_count} param${a.param_count === 1 ? '' : 's'}</span>
+                                ${a.workflow_name ? `<span>${escapeHtml(a.workflow_name)}</span>` : ''}
+                            </div>
+                            <div class="api-item-date">${escapeHtml(a.created_at || '')}</div>
+                        </div>
+                        <div class="api-item-actions"><span class="api-view">View →</span></div>
+                    </div>
+                `).join('');
+                list.querySelectorAll('.api-item').forEach(el => {
+                    el.onclick = () => showApiDetail(el.dataset.id);
+                });
+            } catch (e) {
+                list.innerHTML = `<div class="api-empty"><p>Error loading APIs: ${escapeHtml(e.message)}</p></div>`;
+            }
+        }
+
+        function apiExampleValue(p) {
+            if (p.param_type === 'image') return 'https://example.com/input.png';
+            if (p.param_type === 'number') {
+                const n = Number(p.default);
+                return (isFinite(n) && p.default !== '' && p.default != null) ? n : 0;
+            }
+            if (p.param_type === 'boolean') return String(p.default).toLowerCase() !== 'false';
+            return (p.default !== undefined && p.default !== null && p.default !== '') ? String(p.default) : 'your text here';
+        }
+
+        async function showApiDetail(id) {
+            $('apiListCard').classList.add('hidden');
+            const card = $('apiDetailCard');
+            card.classList.remove('hidden');
+            const body = $('apiDetailBody');
+            body.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading…</p></div>';
+            let def;
+            try {
+                const res = await fetch(`/api/apis/${encodeURIComponent(id)}`);
+                if (!res.ok) throw new Error(await res.text());
+                def = await res.json();
+            } catch (e) {
+                body.innerHTML = `<p class="error-msg">Error: ${escapeHtml(e.message)}</p>`;
+                return;
+            }
+            apiCurrentDef = def;
+            $('apiDetailTitle').textContent = '🔌 ' + def.name;
+            $('apiDeleteBtn').dataset.id = def.id;
+
+            const origin = window.location.origin;
+            const url = `${origin}/api/v1/${encodeURIComponent(def.id)}`;
+            const specUrl = `${origin}/api/apis/${encodeURIComponent(def.id)}/openapi.json`;
+            const params = def.params || [];
+
+            const bodyObj = {};
+            params.forEach(p => { bodyObj[p.name] = apiExampleValue(p); });
+            const bodyJson = JSON.stringify(bodyObj, null, 2);
+            const curl = `curl -X POST "${url}" \\\n  -H "Content-Type: application/json" \\\n  -d '${JSON.stringify(bodyObj)}'`;
+
+            // Structured input params (copyable for AI)
+            const inputParamsJson = JSON.stringify(params.map(p => {
+                const o = { name: p.name, type: p.param_type === 'image' ? 'string' : p.param_type, required: !!p.required };
+                if (p.param_type === 'image') { o.format = 'url'; o.description = 'Public image URL — downloaded by the server before running.'; }
+                if (p.param_type !== 'image' && p.default !== '' && p.default != null) o.default = p.default;
+                if (p.random_seed) o.note = 'Omit to auto-randomize';
+                return o;
+            }), null, 2);
+
+            const responseSchema = JSON.stringify({
+                job_id: "string — output folder id",
+                outputs: [
+                    { type: "image | audio | text", filename: "string", mime_type: "image/png (image only)", base64: "string — base64-encoded image bytes (image only)", url: "string (hosted URL)", data: "string (text only)" }
+                ]
+            }, null, 2);
+
+            const errorCodes = [
+                { code: 200, meaning: "Success", body: '{ "job_id": "...", "outputs": [ ... ] }' },
+                { code: 400, meaning: "Missing/invalid image URL (must be http/https), or body is not a JSON object", body: '{ "error": "..." }' },
+                { code: 404, meaning: "API not found", body: '{ "error": "API not found" }' },
+                { code: 500, meaning: "Execution error (ComfyUI unreachable, download failed, or workflow error)", body: '{ "error": "..." }' }
+            ];
+            const errorCodesJson = JSON.stringify(errorCodes, null, 2);
+            const errorRows = errorCodes.map(ec => `
+                <tr>
+                    <td><span class="api-code-badge api-code-${ec.code < 300 ? 'ok' : (ec.code < 500 ? 'warn' : 'err')}">${ec.code}</span></td>
+                    <td>${escapeHtml(ec.meaning)}</td>
+                    <td><code>${escapeHtml(ec.body)}</code></td>
+                </tr>`).join('');
+
+            const paramRows = params.length ? params.map(p => `
+                <tr>
+                    <td><code>${escapeHtml(p.name)}</code></td>
+                    <td><span class="api-type api-type-${escapeHtml(p.param_type)}">${p.param_type === 'image' ? 'string (URL)' : escapeHtml(p.param_type)}</span></td>
+                    <td>${p.required ? '<span class="api-req">required</span>' : '<span class="api-opt">optional</span>'}</td>
+                    <td>${p.param_type === 'image'
+                        ? 'Public URL — downloaded by the server'
+                        : (p.default !== '' && p.default != null ? `default: <code>${escapeHtml(String(p.default).slice(0, 60))}</code>` : '—')}</td>
+                </tr>`).join('') : '<tr><td colspan="4" style="color:var(--text-muted)">No input parameters</td></tr>';
+
+            const tryInputs = params.map(p => {
+                const ph = p.param_type === 'image' ? 'https://…  (public image URL)' : '';
+                const val = p.param_type === 'image' ? '' : escapeHtml(String(p.default ?? ''));
+                return `
+                <div class="form-group api-try-field">
+                    <label>${escapeHtml(p.name)} <span class="api-try-type">${p.param_type === 'image' ? 'URL' : escapeHtml(p.param_type)}</span>${p.required ? ' <span class="api-req">*</span>' : ''}</label>
+                    <input type="text" class="api-try-input" data-name="${escapeHtml(p.name)}" data-type="${escapeHtml(p.param_type)}" placeholder="${escapeHtml(ph)}" value="${val}">
+                </div>`;
+            }).join('');
+
+            body.innerHTML = `
+                <div class="api-endpoint">
+                    <span class="api-method">POST</span>
+                    <code class="api-url-text">${escapeHtml(url)}</code>
+                    <button class="api-copy" data-copy-url>Copy URL</button>
+                </div>
+                <div class="api-integration">
+                    <div class="api-integration-text">
+                        <strong>🤖 Build a client with AI</strong>
+                        <span>Copy the full OpenAPI spec (or its URL) and paste it into any AI / codegen tool to generate a ready-to-use client.</span>
+                    </div>
+                    <div class="api-integration-actions">
+                        <button class="btn btn-accent" data-copy-spec>🤖 Copy full spec (OpenAPI)</button>
+                        <button class="api-copy" data-copy-specurl>🔗 Copy spec URL</button>
+                    </div>
+                </div>
+                <div class="api-meta-row">
+                    <span>Workflow: <strong>${escapeHtml(def.workflow_name || '—')}</strong></span>
+                    <span>Created: ${escapeHtml(def.created_at || '—')}</span>
+                </div>
+
+                <div class="api-section">
+                    <div class="api-code-head"><h3>Input parameters</h3><button class="api-copy" data-copy-inparams>Copy JSON</button></div>
+                    <div class="api-table-wrap">
+                        <table class="api-table">
+                            <thead><tr><th>Name</th><th>Type</th><th></th><th>Notes</th></tr></thead>
+                            <tbody>${paramRows}</tbody>
+                        </table>
+                    </div>
+                    <p class="api-note">⚠️ Image inputs must be public URLs (<code>http(s)://…</code>). The server downloads them before running — local file paths are not accepted.</p>
+                </div>
+
+                <div class="api-grid">
+                    <div class="api-section">
+                        <div class="api-code-head"><h3>Request body</h3><button class="api-copy" data-copy-body>Copy</button></div>
+                        <pre class="api-code">${escapeHtml(bodyJson)}</pre>
+                    </div>
+                    <div class="api-section">
+                        <div class="api-code-head"><h3>Response params</h3><button class="api-copy" data-copy-resp>Copy</button></div>
+                        <pre class="api-code">${escapeHtml(responseSchema)}</pre>
+                    </div>
+                </div>
+
+                <div class="api-section">
+                    <div class="api-code-head"><h3>Error codes</h3><button class="api-copy" data-copy-errors>Copy JSON</button></div>
+                    <div class="api-table-wrap">
+                        <table class="api-table">
+                            <thead><tr><th>Code</th><th>Meaning</th><th>Body</th></tr></thead>
+                            <tbody>${errorRows}</tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="api-section">
+                    <div class="api-code-head"><h3>cURL</h3><button class="api-copy" data-copy-curl>Copy</button></div>
+                    <pre class="api-code">${escapeHtml(curl)}</pre>
+                </div>
+
+                <div class="api-section api-tryit">
+                    <h3>⚡ Try it</h3>
+                    <p class="api-note">Runs against the ComfyUI server in the top bar (<strong>${escapeHtml($('serverAddress').value || 'not set')}</strong>).</p>
+                    ${tryInputs || '<p class="api-note">This API has no inputs.</p>'}
+                    <button class="btn btn-primary" id="apiTryRunBtn">▶ Run API</button>
+                    <div id="apiTryResult" class="api-try-result"></div>
+                </div>
+            `;
+
+            body.querySelector('[data-copy-url]').onclick = (e) => copyToClipboard(url, e.target);
+            body.querySelector('[data-copy-body]').onclick = (e) => copyToClipboard(bodyJson, e.target);
+            body.querySelector('[data-copy-resp]').onclick = (e) => copyToClipboard(responseSchema, e.target);
+            body.querySelector('[data-copy-curl]').onclick = (e) => copyToClipboard(curl, e.target);
+            body.querySelector('[data-copy-inparams]').onclick = (e) => copyToClipboard(inputParamsJson, e.target);
+            body.querySelector('[data-copy-errors]').onclick = (e) => copyToClipboard(errorCodesJson, e.target);
+            body.querySelector('[data-copy-specurl]').onclick = (e) => copyToClipboard(specUrl, e.target);
+            body.querySelector('[data-copy-spec]').onclick = async (e) => {
+                const btn = e.target;
+                const old = btn.textContent;
+                btn.textContent = 'Fetching…'; btn.disabled = true;
+                try {
+                    const sres = await fetch(specUrl);
+                    if (!sres.ok) throw new Error(await sres.text());
+                    const spec = JSON.stringify(await sres.json(), null, 2);
+                    btn.disabled = false; btn.textContent = old;
+                    copyToClipboard(spec, btn);
+                } catch (err) {
+                    btn.disabled = false;
+                    btn.textContent = '✗ Failed';
+                    setTimeout(() => { btn.textContent = old; }, 1600);
+                }
+            };
+            $('apiTryRunBtn').onclick = () => runApiTry(def);
+        }
+
+        async function runApiTry(def) {
+            const btn = $('apiTryRunBtn');
+            const resultEl = $('apiTryResult');
+            const inputs = document.querySelectorAll('.api-try-input');
+            const reqBody = { _server: $('serverAddress').value };
+            inputs.forEach(inp => {
+                const name = inp.dataset.name, type = inp.dataset.type;
+                const v = inp.value.trim();
+                if (type === 'image') {
+                    if (v) reqBody[name] = v;
+                } else if (type === 'number') {
+                    if (v !== '') reqBody[name] = Number(v);
+                } else if (type === 'boolean') {
+                    reqBody[name] = (v.toLowerCase() === 'true' || v === '1');
+                } else {
+                    if (v !== '') reqBody[name] = v;
+                }
+            });
+            btn.disabled = true; btn.textContent = '⏳ Running…';
+            resultEl.innerHTML = '<div class="loading"><div class="spinner"></div><p>Running…</p></div>';
+            try {
+                const res = await fetch(`/api/v1/${def.id}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(reqBody)
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Request failed');
+                const imgs = (data.outputs || []).filter(o => o.type === 'image');
+                if (!imgs.length) {
+                    resultEl.innerHTML = `<pre class="api-code">${escapeHtml(JSON.stringify(data, null, 2))}</pre>`;
+                } else {
+                    resultEl.innerHTML = '<div class="api-try-images">' + imgs.map(o => {
+                        const src = o.base64 ? `data:${o.mime_type || 'image/png'};base64,${o.base64}` : o.url;
+                        return `<a href="${src}" target="_blank" rel="noopener"><img src="${src}" alt="${escapeHtml(o.filename || '')}"></a>`;
+                    }).join('') + '</div>';
+                }
+            } catch (e) {
+                resultEl.innerHTML = `<p class="error-msg">${escapeHtml(e.message)}</p>`;
+            } finally {
+                btn.disabled = false; btn.textContent = '▶ Run API';
+            }
+        }
+
+        $('refreshApisBtn').onclick = loadApis;
+        $('apiBackBtn').onclick = () => {
+            $('apiDetailCard').classList.add('hidden');
+            $('apiListCard').classList.remove('hidden');
+            loadApis();
+        };
+        $('apiDeleteBtn').onclick = async (e) => {
+            const id = $('apiDeleteBtn').dataset.id;
+            if (!id) return;
+            if (!confirm('Delete this API? This cannot be undone.')) return;
+            try {
+                await fetch(`/api/apis/${encodeURIComponent(id)}`, { method: 'DELETE' });
+                $('apiDetailCard').classList.add('hidden');
+                $('apiListCard').classList.remove('hidden');
+                loadApis();
+            } catch (err) { alert('Delete failed: ' + err.message); }
+        };
+
         // ==================== Tab Switching ====================
         document.querySelectorAll('.tab').forEach(tab => {
             tab.onclick = function() {
@@ -2532,6 +4175,11 @@
                 this.classList.add('active');
                 document.getElementById(this.dataset.tab + 'Tab').classList.add('active');
                 if (this.dataset.tab === 'browse') loadBrowseBatches();
+                if (this.dataset.tab === 'api') {
+                    $('apiDetailCard').classList.add('hidden');
+                    $('apiListCard').classList.remove('hidden');
+                    loadApis();
+                }
             };
         });
 

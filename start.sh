@@ -21,10 +21,12 @@ pip install -q -r requirements.txt
 mkdir -p data/workflows data/templates data/outputs
 
 # Start server
+# Port 8930 chosen to avoid colliding with other local dev services.
+export PORT="${PORT:-8930}"
 echo ""
 echo "=========================================="
 echo "  ComfyUI Batch Client"
-echo "  Open: http://127.0.0.1:8000"
+echo "  Open: http://127.0.0.1:${PORT}"
 echo "=========================================="
 echo ""
 python scripts/server.py

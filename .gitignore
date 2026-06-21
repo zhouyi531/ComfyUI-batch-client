@@ -21,11 +21,8 @@ env/
 .DS_Store
 Thumbs.db
 
-# Project specific
-data/outputs/
-data/workflows/
-data/templates/
-data/uploads/
+# Project specific (local runtime data)
+data/
 
 # Logs
 *.log

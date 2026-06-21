@@ -9,6 +9,7 @@
 - [Web UI 使用方法](#web-ui-使用方法)
   - [模式一：Data Template Builder（数据模板构建器）](#模式一data-template-builder数据模板构建器)
   - [模式二：Run Mode（批量运行模式）](#模式二run-mode批量运行模式)
+  - [模式三：APIs（发布并调用 API）](#模式三apis发布并调用-api)
 - [CLI 命令行使用](#cli-命令行使用)
 - [数据文件说明](#数据文件说明)
 - [常见问题](#常见问题)
@@ -70,13 +71,13 @@ pip install -r requirements.txt
 python scripts/server.py
 ```
 
-启动后打开浏览器访问：**http://127.0.0.1:8000**
+启动后打开浏览器访问：**http://127.0.0.1:8930**
 
 ---
 
 ## Web UI 使用方法
 
-Web UI 提供两种使用模式：
+Web UI 提供三种使用模式：
 
 ### 模式一：Data Template Builder（数据模板构建器）
 
@@ -147,22 +148,35 @@ Web UI 提供两种使用模式：
 
 #### 步骤 2：编辑批量数据
 
-加载后显示批量数据编辑器：
+加载后显示批量数据编辑器，顶部提供三种输入方式：
 
-- 每一行代表一次运行的参数
+| 模式 | 说明 |
+|------|------|
+| ✍️ **Manual（手动）** | 手动逐行填写参数，每一行代表一次运行 |
+| ⬆️ **Upload Images（上传图片）** | 选择/拖拽多张本地图片一次性上传，每张图片自动生成一行任务，并带缩略图预览 |
+| 📂 **Server Folder（服务器文件夹）** | 指定运行服务器上的文件夹路径，自动展开为多行 |
+
+通用操作：
+
 - 点击 **"+ Add Row"** 添加新行
-- 点击行末的 🗑️ 删除该行
+- 点击行末的 🗑️ 删除该行 / 📋 复制该行
 
 **文件类型参数支持：**
 - 直接输入服务器上的文件路径
 - 输入本地文件夹路径（系统会自动展开为多行）
-- 点击 📁 按钮上传本地文件
+- 点击 📁 按钮上传单个本地文件
 
 #### 步骤 3：运行批量任务
 
 1. 点击 **"🚀 Run Batch"** 开始批量执行
 2. 执行过程中可点击 **"⏹️ Stop"** 中止任务
 3. 结果实时显示在下方画廊中
+
+#### 步骤 4：导出 PDF 报告
+
+- 批量完成后，结果卡片右上角会出现 **"📄 Export PDF"** 按钮，点击即可把本次结果导出为 PDF 并下载到本地。
+- 在 **Browse（浏览）** 标签里打开任意历史批次或本地文件夹后，同样可以点击 **"📄 Export PDF"** 导出。
+- 报告包含封面（工作流名称、时间、服务器、数量、预览缩略图）以及每张图片对应的参数，**支持中文**。
 
 #### 输出结果
 
@@ -173,9 +187,84 @@ data/outputs/
 ├── batch_1234567890_abc123/
 │   ├── image1_workflow.png
 │   ├── image2_workflow.png
+│   ├── parameters.json
 │   └── ...
 └── ...
 ```
+
+---
+
+### 模式三：APIs（发布并调用 API）
+
+把一个**参数已确定**的工作流一键发布成可调用的 HTTP API，方便其他程序/系统直接调用。
+
+#### 步骤 1：创建 API
+
+参数确定后（即在 **Data Template Builder** 的第 3/4 步，或 **Run Mode** 加载好工作流与模板后），
+点击 **"🔌 Create API"** 按钮，输入一个 API 名称即可。系统会：
+
+- 把当前工作流快照与所选参数固化进 API 定义（保存在 `data/apis/`）
+- 自动识别参数类型：图片/文件类参数标记为 **image（必须传 URL）**，其余为 text / number / boolean
+- 创建后自动跳转到 **🔌 APIs** 标签的详情页
+
+#### 步骤 2：API 列表页
+
+**🔌 APIs** 标签会列出所有已创建的 API，显示名称、调用路径 `POST /api/v1/<名称>`、参数数量、来源工作流与创建时间。点击任意一项查看详情。
+
+#### 步骤 3：API 详情页（调用说明 + 一键复制）
+
+详情页提供完整调用说明，每块都带 **Copy** 一键复制：
+
+- **Endpoint URL**：`POST http://<host>:<port>/api/v1/<名称>`
+- **Input parameters（输入参数）**：参数名、类型、是否必填、默认值/说明（可「Copy JSON」复制结构化定义）
+- **Request body**：示例请求 JSON
+- **Response params（返回参数）**：返回结构（`outputs[]`，含 `url` 与 base64 `image`）
+- **Error codes（错误码）**：200 / 400 / 404 / 500 含义与返回体（可「Copy JSON」）
+- **cURL**：可直接复制运行的命令
+- **⚡ Try it**：直接在浏览器里填参数试跑，运行结果（图片）就地展示
+
+#### 让 AI 直接生成可用 client
+
+详情页顶部有 **「🤖 Build a client with AI」** 区域：
+
+- **🤖 Copy full spec (OpenAPI)**：复制完整的 **OpenAPI 3.1** 规范（含 URL、输入/输出参数、错误码），
+  粘贴给任意 AI / 代码生成工具即可生成一个可直接使用的客户端。
+- **🔗 Copy spec URL**：复制规范地址 `http://<host>:<port>/api/apis/<名称>/openapi.json`，
+  很多工具/AI 可直接读取该 URL 生成 client。
+
+调用示例：
+
+```bash
+curl -X POST "http://127.0.0.1:8000/api/v1/my_api" \
+  -H "Content-Type: application/json" \
+  -d '{"image": "https://example.com/input.png", "prompt": "a cat", "seed": 123}'
+```
+
+#### 重要：图片输入必须是 URL
+
+> API 的图片输入**不支持本地路径**，必须提供公网可访问的 **URL**。服务器会先把图片下载下来，
+> 再上传到 ComfyUI 进行处理。若传入非 `http(s)://` 的值，会返回 400 错误。
+
+#### 输出
+
+- **图片结果以 base64 返回**。接口返回 JSON，`outputs[]` 中每张图片包含 `base64`（图片字节的 base64 编码）、`mime_type` 以及托管 `url`：
+
+```json
+{
+  "job_id": "api_...",
+  "outputs": [
+    { "type": "image", "filename": "result.png", "mime_type": "image/png", "base64": "iVBORw0KGgo...", "url": "http://<host>/api/outputs/<job_id>/result.png" }
+  ]
+}
+```
+
+- 客户端拿到 `base64` 后解码即可得到图片（也可用 `data:<mime_type>;base64,<base64>` 直接显示）。
+- 每次 API 调用的结果也会保存到 `data/outputs/`，可在 **Browse** 标签中查看。
+
+#### 管理 API
+
+- 在详情页点击 **🗑️ Delete** 可删除该 API。
+- API 定义文件位于 `data/apis/<名称>.json`。
 
 ---
 
@@ -250,7 +339,9 @@ data/
 │   └── my_workflow.json
 ├── templates/      # 保存的数据模板
 │   └── my_template.json
-├── outputs/        # 批量任务输出
+├── apis/           # 已发布的 API 定义
+│   └── my_api.json
+├── outputs/        # 批量任务 / API 调用输出
 │   └── batch_xxx/
 │       └── output_xxx.png
 └── uploads/        # 上传的临时文件
@@ -337,6 +428,13 @@ data/
 
 - 单次运行：结果在 Web UI 中显示，不自动保存
 - 批量运行：保存在 `data/outputs/batch_xxx/` 目录下
+- API 调用：保存在 `data/outputs/api_xxx/` 目录下，也会出现在 Browse 标签
+
+### Q: 调用 API 时图片为什么必须用 URL？
+
+API 面向程序化调用，服务器与调用方通常不在同一台机器，无法读取调用方的本地文件。
+因此图片输入必须是公网可访问的 `http(s)://` URL，服务器会先下载再上传到 ComfyUI 处理。
+如果你在本机手动试跑，可以把图片放到任意图床或静态服务器上拿到 URL，再填入。
 
 ---
 

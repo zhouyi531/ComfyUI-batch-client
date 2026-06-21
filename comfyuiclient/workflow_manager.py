@@ -101,9 +101,11 @@ class WorkflowManager:
                  if isinstance(value, list) and len(value) == 2 and isinstance(value[0], str):
                      continue # It's a link
                  
-                 # Guess type
+                 # Guess type (bool check must precede int/float since bool is subclass of int)
                  var_type = "text"
-                 if isinstance(value, (int, float)):
+                 if isinstance(value, bool):
+                     var_type = "boolean"
+                 elif isinstance(value, (int, float)):
                      var_type = "number"
                  elif isinstance(value, str):
                      if value.startswith("**") and value.endswith("**"):
@@ -174,14 +176,20 @@ class WorkflowManager:
 
     @staticmethod
     def _cast_value(val):
-        """Try to cast string numbers to int/float if they look like it"""
+        """Try to cast string values to bool/int/float"""
         if isinstance(val, str):
+            low = val.strip().lower()
+            if low == 'true':
+                return True
+            if low == 'false':
+                return False
             try:
-                # Naive check, only if it looks purely numerical
-                 if val.replace(".", "", 1).isdigit():
-                     if "." in val:
-                         return float(val)
-                     return int(val)
+                stripped = val.strip()
+                test = stripped.lstrip('-')
+                if test and test.replace(".", "", 1).isdigit():
+                    if "." in stripped:
+                        return float(stripped)
+                    return int(stripped)
             except:
                 pass
         return val

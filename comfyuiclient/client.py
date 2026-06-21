@@ -205,14 +205,52 @@ class ComfyUIClientAsync:
             message = await self.ws.receive()
             if message.type == aiohttp.WSMsgType.TEXT:
                 data = json.loads(message.data)
+                mtype = data.get("type")
+                mdata = data.get("data") or {}
+                # Surface ComfyUI execution errors instead of returning empty output
+                if mtype == "execution_error" and mdata.get("prompt_id") == prompt_id:
+                    raise RuntimeError(
+                        "ComfyUI execution failed at node "
+                        f"{mdata.get('node_id')} ({mdata.get('node_type')}): "
+                        f"{mdata.get('exception_type')}: {mdata.get('exception_message')}"
+                    )
                 if (
-                    data["type"] == "executing"
-                    and data["data"]["node"] is None
-                    and data["data"]["prompt_id"] == prompt_id
+                    mtype == "executing"
+                    and mdata.get("node") is None
+                    and mdata.get("prompt_id") == prompt_id
                 ):
                     break
+            elif message.type in (
+                aiohttp.WSMsgType.CLOSED,
+                aiohttp.WSMsgType.CLOSING,
+                aiohttp.WSMsgType.ERROR,
+            ):
+                raise ConnectionError(
+                    f"WebSocket closed before ComfyUI finished prompt {prompt_id}"
+                )
 
-        history = (await self.get_history(prompt_id))[prompt_id]
+        history_all = await self.get_history(prompt_id)
+        if prompt_id not in history_all:
+            raise RuntimeError(
+                f"ComfyUI returned no history for prompt {prompt_id} "
+                "(execution likely failed)"
+            )
+        history = history_all[prompt_id]
+
+        # ComfyUI records per-prompt status; treat an error status as a failure
+        status = history.get("status") or {}
+        if status.get("status_str") == "error":
+            msg = "ComfyUI reported an error for the prompt"
+            for m in status.get("messages") or []:
+                if isinstance(m, (list, tuple)) and len(m) == 2 and m[0] == "execution_error":
+                    info = m[1] or {}
+                    msg = (
+                        "ComfyUI execution failed at node "
+                        f"{info.get('node_id')} ({info.get('node_type')}): "
+                        f"{info.get('exception_type')}: {info.get('exception_message')}"
+                    )
+                    break
+            raise RuntimeError(msg)
         for node_id, node_output in history["outputs"].items():
             if "images" in node_output:
                 images_output = []
