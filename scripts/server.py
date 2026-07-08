@@ -1873,7 +1873,7 @@ app = web.Application()
 app.add_routes(routes)
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", "8930"))
+    port = int(os.environ.get("PORT", "8931"))
     print(f"Data directory: {DATA_DIR}")
     print(f"Starting server at http://127.0.0.1:{port}")
     web.run_app(app, port=port)

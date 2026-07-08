@@ -26,7 +26,7 @@ pip install -r requirements.txt
 python scripts/server.py
 ```
 
-Open http://127.0.0.1:8930
+Open http://127.0.0.1:8931
 
 ## Usage
 

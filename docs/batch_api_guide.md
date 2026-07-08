@@ -312,7 +312,7 @@ batch_data = [
     {"323.image": "/path/to/photo3.jpg", "344.replace": "8", "363.seed": "__random_seed__"},
 ]
 
-resp = requests.post("http://localhost:8930/api/batch", json={
+resp = requests.post("http://localhost:8931/api/batch", json={
     "workflow": workflow,
     "workflow_name": "漫画转真人v6",
     "batch": batch_data,
@@ -324,7 +324,7 @@ print(f"Completed: {result['completed']}/{result['total']}")
 
 for r in result["results"]:
     for out in r["outputs"]:
-        print(f"  Output: http://localhost:8930{out['url']}")
+        print(f"  Output: http://localhost:8931{out['url']}")
 ```
 
 ### 5.3 文件夹批量
@@ -346,7 +346,7 @@ batch_data = [
 | 配置项 | 说明 | 默认值 |
 |--------|------|--------|
 | `COMFY_BASE_URL` 环境变量 | ComfyUI 服务器地址（`host:port`，不带 `http://`） | `127.0.0.1:8188` |
-| 服务端口 | 本项目 Web 服务监听端口 | `8930` |
+| 服务端口 | 本项目 Web 服务监听端口 | `8931` |
 | 数据目录 | `data/workflows/`、`data/templates/`、`data/outputs/` | 项目根目录下 |
 
 启动服务：

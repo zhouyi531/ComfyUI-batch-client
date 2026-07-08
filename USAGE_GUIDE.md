@@ -71,7 +71,7 @@ pip install -r requirements.txt
 python scripts/server.py
 ```
 
-启动后打开浏览器访问：**http://127.0.0.1:8930**
+启动后打开浏览器访问：**http://127.0.0.1:8931**
 
 ---
 
