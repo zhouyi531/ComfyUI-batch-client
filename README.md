@@ -95,11 +95,20 @@ python scripts/run.py run --template my_template.json --batch batch.json
 └── data/              # Saved workflows, templates, apis, outputs
 ```
 
-## Environment
+## ComfyUI server address
+
+Set it in the **Server** box at the top right of the web UI. It is saved to
+`data/settings.json` and becomes the default for every run, batch and saved API
+— including API calls made from outside the browser.
+
+`COMFY_BASE_URL` is only the fallback used before anything has been saved:
 
 ```bash
 export COMFY_BASE_URL="192.168.1.21:8188"
 ```
+
+A single request can still override both by sending `server_address`
+(`/api/run`, `/api/batch`) or `_server` (`/api/v1/<id>`).
 
 ## Acknowledgments
 

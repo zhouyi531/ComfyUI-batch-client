@@ -151,7 +151,7 @@ Data Template **不包含工作流本身**，只记录：
      "workflow": { ... },
      "workflow_name": "漫画转真人v6",
      "batch": [ ... ],
-     "server_address": "127.0.0.1:8188"  // 可选
+     "server_address": "127.0.0.1:8188"  // 可选，默认用 UI 里保存的地址
    }
           │
           ▼
@@ -228,7 +228,7 @@ Content-Type: application/json
     { "323.image": "photo1.jpg", "363.seed": "__random_seed__" },
     { "323.image": "photo2.jpg", "363.seed": "__random_seed__" }
   ],
-  "server_address": "host:port", // ComfyUI 服务器地址（可选，默认 COMFY_BASE_URL）
+  "server_address": "host:port", // ComfyUI 地址（可选，默认用 UI 里保存的地址）
   "save_outputs": true           // 是否保存输出文件（可选，默认 true）
 }
 ```
@@ -345,7 +345,8 @@ batch_data = [
 
 | 配置项 | 说明 | 默认值 |
 |--------|------|--------|
-| `COMFY_BASE_URL` 环境变量 | ComfyUI 服务器地址（`host:port`，不带 `http://`） | `127.0.0.1:8188` |
+| Web UI 右上角 Server 框 | ComfyUI 地址，保存在 `data/settings.json`，对所有调用生效 | 未设置 |
+| `COMFY_BASE_URL` 环境变量 | 上面没保存过地址时的兜底默认值（`host:port`，不带 `http://`） | `127.0.0.1:8188` |
 | 服务端口 | 本项目 Web 服务监听端口 | `8931` |
 | 数据目录 | `data/workflows/`、`data/templates/`、`data/outputs/` | 项目根目录下 |
 
@@ -355,4 +356,4 @@ batch_data = [
 python scripts/server.py
 ```
 
-确保 ComfyUI 已在 `COMFY_BASE_URL` 指定的地址上运行。
+确保 ComfyUI 已在当前配置的地址上运行（`GET /api/settings` 可查看，`POST /api/settings` 可修改）。

@@ -36,14 +36,21 @@ pip install -r requirements.txt
 
 ### 配置 ComfyUI 服务器地址
 
-默认服务器地址为 `127.0.0.1:8188`。如需修改，有两种方式：
+本机可能同时跑多个 ComfyUI 实例，地址在 **Web UI 右上角的 Server 输入框**里切换：
+
+- 修改后自动保存到 `data/settings.json`，下次打开默认就是它；
+- 输入框带下拉历史，最近用过的 8 个地址可直接选；
+- 保存的地址对**所有**调用生效：单次运行、批量运行、以及已保存的 API
+  （包括从浏览器外部用 curl / 程序调用 `/api/v1/<id>`）和命令行 `scripts/run.py`。
+
+环境变量只是**还没保存过任何地址时**的兜底默认值：
 
 ```bash
-# 方式一：设置环境变量
 export COMFY_BASE_URL="192.168.1.21:8188"
-
-# 方式二：在 Web UI 右上角直接修改
 ```
+
+单次调用仍可临时覆盖：`/api/run`、`/api/batch` 传 `server_address`，
+`/api/v1/<id>` 传 `_server`。
 
 ---
 
@@ -344,6 +351,7 @@ data/
 ├── outputs/        # 批量任务 / API 调用输出
 │   └── batch_xxx/
 │       └── output_xxx.png
+├── settings.json   # ComfyUI 服务器地址 + 最近使用记录
 └── uploads/        # 上传的临时文件
 ```
 
@@ -386,7 +394,7 @@ data/
 ### Q: 连接不上 ComfyUI 服务器？
 
 1. 确认 ComfyUI 服务器正在运行
-2. 检查服务器地址是否正确（默认为 `127.0.0.1:8188`）
+2. 检查右上角 Server 框里的地址是否正确（本机多实例时注意端口）
 3. 如果 ComfyUI 在其他机器上，确保网络可达
 4. 查看 Web UI 右上角的连接状态指示器
 

@@ -1600,8 +1600,10 @@
             </div>
             <div class="toolbar">
                 <div class="server-config">
-                    <label>Server</label>
-                    <input type="text" id="serverAddress" value="192.168.1.21:8188" placeholder="127.0.0.1:8188">
+                    <label for="serverAddress">Server</label>
+                    <input type="text" id="serverAddress" list="serverPresets" autocomplete="off"
+                           placeholder="127.0.0.1:8188" title="ComfyUI host:port — saved as the default for every run and API call">
+                    <datalist id="serverPresets"></datalist>
                 </div>
                 <div class="server-status">
                     <span class="status-dot" id="statusDot"></span>
@@ -1769,7 +1771,7 @@
                             <input type="file" id="batchUploadInput" accept="image/*,video/*,audio/*" multiple style="display:none;">
                             <div class="upload-dropzone-icon">⬆️</div>
                             <p class="upload-dropzone-title">Drop images here, or click to browse</p>
-                            <p class="upload-dropzone-sub">Select many files at once — each one becomes a batch job</p>
+                            <p class="upload-dropzone-sub">Select many files at once, or paste images with Ctrl+V — each one becomes a batch job</p>
                         </div>
                         <div class="upload-progress hidden" id="uploadProgress">
                             <div class="upload-progress-bar"><span id="uploadProgressFill"></span></div>
@@ -1906,14 +1908,84 @@
 
         // Tab switching is handled after Browse section is defined
 
+        // ==================== COMFYUI SERVER ADDRESS ====================
+        // The address lives on the backend (data/settings.json) because every
+        // ComfyUI call is made server-side — including saved APIs invoked by
+        // outside clients that never see this page. localStorage is only a
+        // cache so the field paints instantly on reload.
+        const SERVER_ADDR_KEY = 'comfyServerAddress';
+
+        function normalizeServer(addr) {
+            return (addr || '').trim().replace(/^https?:\/\//, '').replace(/\/+$/, '').trim();
+        }
+
+        function getServerAddress() {
+            return normalizeServer($('serverAddress').value);
+        }
+
+        function renderServerPresets(list) {
+            $('serverPresets').innerHTML = (list || [])
+                .map(s => `<option value="${escapeHtml(s)}"></option>`).join('');
+        }
+
+        let lastSavedServer = null;
+
+        /** Put an address in the field and make it the default for future runs. */
+        async function setServerAddress(addr, { persist = true } = {}) {
+            const server = normalizeServer(addr);
+            if (!server) return;
+            $('serverAddress').value = server;
+            try { localStorage.setItem(SERVER_ADDR_KEY, server); } catch (e) { /* private mode */ }
+            if (persist && server !== lastSavedServer) {
+                lastSavedServer = server;
+                try {
+                    const res = await fetch('/api/settings', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ comfy_server: server })
+                    });
+                    const data = await res.json();
+                    if (res.ok) renderServerPresets(data.recent_servers);
+                } catch (e) {
+                    lastSavedServer = null; // let the next change retry
+                    console.warn('Could not save server address:', e);
+                }
+            }
+        }
+
+        async function initServerAddress() {
+            let cached = '';
+            try { cached = normalizeServer(localStorage.getItem(SERVER_ADDR_KEY)); } catch (e) { /* ignore */ }
+            if (cached) $('serverAddress').value = cached;
+
+            try {
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+                renderServerPresets(data.recent_servers);
+                if (data.saved) {
+                    // The backend is the source of truth once something is saved.
+                    lastSavedServer = data.comfy_server;
+                    $('serverAddress').value = data.comfy_server;
+                    try { localStorage.setItem(SERVER_ADDR_KEY, data.comfy_server); } catch (e) { /* ignore */ }
+                } else if (cached) {
+                    await setServerAddress(cached);   // adopt this browser's address
+                } else {
+                    $('serverAddress').value = data.comfy_server;
+                    lastSavedServer = null;
+                }
+            } catch (e) {
+                console.warn('Could not load settings:', e);
+            }
+            checkServerStatus();
+        }
+
         // ==================== SERVER STATUS ====================
         let statusCheckInterval = null;
-        
+
         async function checkServerStatus() {
             const dot = $('statusDot');
             const text = $('statusText');
-            const server = $('serverAddress').value;
-            
+            const server = getServerAddress();
+
             dot.className = 'status-dot checking';
             text.textContent = 'Checking...';
             
@@ -1934,11 +2006,25 @@
             }
         }
         
-        // Check status on load and when server address changes
-        checkServerStatus();
-        $('serverAddress').onchange = checkServerStatus;
-        $('serverAddress').onblur = checkServerStatus;
-        
+        // Load the saved address, then check status; re-save and re-check on edit
+        async function onServerAddressEdited() {
+            const server = getServerAddress();
+            if (!server) {
+                // Emptying the field isn't a way to unset the server; put it back.
+                if (lastSavedServer) $('serverAddress').value = lastSavedServer;
+                return;
+            }
+            if (server === lastSavedServer) {
+                $('serverAddress').value = server;  // normalized in place
+                return;
+            }
+            await setServerAddress(server);
+            checkServerStatus();
+        }
+        $('serverAddress').onchange = onServerAddressEdited;
+        $('serverAddress').onblur = onServerAddressEdited;
+        initServerAddress();
+
         // Periodic status check every 30 seconds
         statusCheckInterval = setInterval(checkServerStatus, 30000);
 
@@ -2143,7 +2229,7 @@
         $('runBtn').onclick = async () => {
             const formData = new FormData();
             formData.append('workflow', JSON.stringify(currentWorkflow));
-            formData.append('server_address', $('serverAddress').value);
+            formData.append('server_address', getServerAddress());
             
             selectedInputs.forEach(v => {
                 if (v._randomSeed) {
@@ -2268,7 +2354,7 @@
                 body: JSON.stringify({
                     name, workflow,
                     workflow_name: workflowName || name,
-                    server_address: $('serverAddress').value,
+                    server_address: getServerAddress(),
                     variables
                 })
             });
@@ -2475,7 +2561,7 @@
             return 'image';
         }
 
-        async function handleBatchUploads(fileList) {
+        async function handleBatchUploads(fileList, { append = false } = {}) {
             const files = Array.from(fileList || []);
             if (files.length === 0) return;
             if (!batchUploadVarId) { alert('No file variable available to map uploads to.'); return; }
@@ -2532,9 +2618,9 @@
                 alert('All uploads failed. Check the server logs.');
                 return;
             }
-            batchData = ok;
+            batchData = append ? batchData.concat(ok) : ok;
             hide(progress);
-            $('uploadFileCount').textContent = `✓ Uploaded ${ok.length} file${ok.length !== 1 ? 's' : ''} — ready to run batch`;
+            $('uploadFileCount').textContent = `✓ ${batchData.length} file${batchData.length !== 1 ? 's' : ''} ready to run batch`;
             show($('uploadFileCount'));
             renderBatchEditor();
         }
@@ -2552,6 +2638,16 @@
                 zone.classList.remove('dragover');
                 handleBatchUploads(e.dataTransfer.files);
             };
+            document.addEventListener('paste', (e) => {
+                if (batchInputMode !== 'upload' || zone.offsetParent === null) return;
+                const files = Array.from(e.clipboardData?.files || []);
+                if (files.length === 0) return;
+                e.preventDefault();
+                // Append when the current batch already came from files, so
+                // repeated pastes build up the batch instead of replacing it.
+                const append = batchData.length > 0 && batchData.every(r => r._folderFile);
+                handleBatchUploads(files, { append });
+            });
         })();
 
         $('loadFolderBtn').onclick = async () => {
@@ -3062,7 +3158,7 @@
                         workflow: batchWorkflow,
                         workflow_name: $('batchWorkflowSelect').value,
                         batch: cleanBatchData,
-                        server_address: $('serverAddress').value
+                        server_address: getServerAddress()
                     }),
                     signal: batchAbortController.signal
                 });
@@ -3708,9 +3804,11 @@
                 return r;
             });
 
-            // 5. Update server address if available
+            // 5. Reuse the server this job ran on, and make it the default so
+            //    the field and the saved setting never disagree.
             if (serverAddress) {
-                $('serverAddress').value = serverAddress;
+                await setServerAddress(serverAddress);
+                checkServerStatus();
             }
 
             // 6. Set workflow select dropdown
@@ -4069,11 +4167,12 @@
                 <div class="api-section">
                     <div class="api-code-head"><h3>cURL</h3><button class="api-copy" data-copy-curl>Copy</button></div>
                     <pre class="api-code">${escapeHtml(curl)}</pre>
+                    <p class="api-note">Calls run against the ComfyUI server saved in the top bar (<strong>${escapeHtml(getServerAddress() || 'not set')}</strong>). Change it there to move every API to another instance, or add <code>"_server": "host:port"</code> to a single request.</p>
                 </div>
 
                 <div class="api-section api-tryit">
                     <h3>⚡ Try it</h3>
-                    <p class="api-note">Runs against the ComfyUI server in the top bar (<strong>${escapeHtml($('serverAddress').value || 'not set')}</strong>).</p>
+                    <p class="api-note">Runs against the ComfyUI server in the top bar (<strong>${escapeHtml(getServerAddress() || 'not set')}</strong>).</p>
                     ${tryInputs || '<p class="api-note">This API has no inputs.</p>'}
                     <button class="btn btn-primary" id="apiTryRunBtn">▶ Run API</button>
                     <div id="apiTryResult" class="api-try-result"></div>
@@ -4110,7 +4209,7 @@
             const btn = $('apiTryRunBtn');
             const resultEl = $('apiTryResult');
             const inputs = document.querySelectorAll('.api-try-input');
-            const reqBody = { _server: $('serverAddress').value };
+            const reqBody = { _server: getServerAddress() };
             inputs.forEach(inp => {
                 const name = inp.dataset.name, type = inp.dataset.type;
                 const v = inp.value.trim();

@@ -11,6 +11,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from comfyuiclient.client import ComfyUIClientAsync
 from comfyuiclient.workflow_manager import WorkflowManager
+from comfyuiclient.settings import get_comfy_server
 
 # Supported file extensions for folder expansion
 IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif'}
@@ -208,7 +209,8 @@ async def run(args):
     print(f"Total jobs to run: {len(inputs_list)}")
 
     # Initialize client
-    server_addr = os.environ.get("COMFY_BASE_URL", "127.0.0.1:8188").replace("http://", "").replace("https://", "")
+    # The address saved by the web UI, falling back to COMFY_BASE_URL.
+    server_addr = get_comfy_server()
     client = ComfyUIClientAsync(server_addr, "dummy.json")
     
     async def generate_from_workflow(wf):

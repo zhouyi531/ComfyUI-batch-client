@@ -18,12 +18,17 @@ sys.path.append(PROJECT_ROOT)
 
 from comfyuiclient.client import ComfyUIClientAsync
 from comfyuiclient.workflow_manager import WorkflowManager
+from comfyuiclient.settings import (
+    DEFAULT_COMFY_SERVER,
+    get_comfy_server,
+    get_recent_servers,
+    has_saved_server,
+    normalize_server,
+    set_comfy_server,
+)
 from PIL import Image
 
 routes = web.RouteTableDef()
-
-# Configuration
-COMFY_SERVER = os.environ.get("COMFY_BASE_URL", "127.0.0.1:8188").replace("http://", "").replace("https://", "")
 
 # Data directories
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
@@ -295,14 +300,48 @@ async def upload_file(request):
         return web.Response(text=str(e), status=500)
 
 
+# ==================== Settings API ====================
+
+@routes.get('/api/settings')
+async def get_settings(request):
+    """Current ComfyUI address plus the recently used ones (for the picker)."""
+    return web.json_response({
+        "comfy_server": get_comfy_server(),
+        "recent_servers": get_recent_servers(),
+        "default_server": DEFAULT_COMFY_SERVER,
+        "saved": has_saved_server(),
+    })
+
+
+@routes.post('/api/settings')
+async def update_settings(request):
+    """Persist the ComfyUI address used by every server-side call."""
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "Body must be JSON"}, status=400)
+    if not isinstance(body, dict) or 'comfy_server' not in body:
+        return web.json_response({"error": "Missing 'comfy_server'"}, status=400)
+
+    try:
+        server = set_comfy_server(body['comfy_server'])
+    except ValueError as e:
+        return web.json_response({"error": str(e)}, status=400)
+
+    print(f"ComfyUI server set to {server}")
+    return web.json_response({
+        "comfy_server": server,
+        "recent_servers": get_recent_servers(),
+    })
+
+
 # ==================== Server Status API ====================
 
 @routes.get('/api/server/status')
 async def server_status(request):
     """Check ComfyUI server connection status"""
-    custom_server = request.query.get('server')
-    server_addr = custom_server if custom_server else COMFY_SERVER
-    
+    server_addr = normalize_server(request.query.get('server') or '') or get_comfy_server()
+
     try:
         import aiohttp
         async with aiohttp.ClientSession() as session:
@@ -363,7 +402,7 @@ async def run(request):
     if not workflow_json:
         return web.Response(text="Missing workflow", status=400)
 
-    server_addr = custom_server if custom_server else COMFY_SERVER
+    server_addr = normalize_server(custom_server or '') or get_comfy_server()
     client = ComfyUIClientAsync(server_addr, "dummy.json")
     
     try:
@@ -496,7 +535,7 @@ async def batch_run(request):
         batch_data = expanded_batch
         print(f"Total jobs after folder expansion: {len(batch_data)}")
         
-        server_addr = custom_server if custom_server else COMFY_SERVER
+        server_addr = normalize_server(custom_server or '') or get_comfy_server()
         client = ComfyUIClientAsync(server_addr, "dummy.json")
         
         job_id = f"batch_{int(time.time())}_{uuid.uuid4().hex[:6]}"
@@ -1515,7 +1554,9 @@ async def create_api(request):
         "name": name,
         "id": safe,
         "workflow_name": data.get('workflow_name') or name,
-        "server_address": (data.get('server_address') or '').replace("http://", "").replace("https://", ""),
+        # Informational: which instance this API was created against. Calls
+        # resolve the address at request time (see /api/v1/{name}).
+        "server_address": normalize_server(data.get('server_address') or ''),
         "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "params": params,
         "output_nodes": _scan_output_nodes(workflow),
@@ -1734,8 +1775,10 @@ async def call_api(request):
     print(f"API '{api_def['id']}': using {'live' if live_workflow is not None else 'snapshot'} workflow")
 
     params = api_def.get('params', [])
-    server_addr = (body.get('_server') or api_def.get('server_address') or COMFY_SERVER)
-    server_addr = server_addr.replace("http://", "").replace("https://", "")
+    # The saved api_def['server_address'] only records which instance the API
+    # was built against; the current setting decides where the call actually
+    # goes, so switching instances in the UI moves every saved API with it.
+    server_addr = normalize_server(body.get('_server') or '') or get_comfy_server()
 
     # Build inputs keyed by node.field id
     inputs = {}
